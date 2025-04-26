@@ -57,15 +57,20 @@ def tiktok_login(request):
     if '?' in redirect_uri:
         print("WARNING: redirect_uri already contains query parameters, removing them", file=sys.stderr)
         redirect_uri = redirect_uri.split('?')[0]
+
+    # Clean redirect_uri to ensure it doesn't have trailing slash if followed by parameters
+    if redirect_uri.endswith('/'):
+        # Remove the trailing slash to prevent double slashes
+        redirect_uri = redirect_uri.rstrip('/')
     
-    # TikTok OAuth authorization URL - CORRECTED to keep state separate from redirect_uri
+    # TikTok OAuth authorization URL
     auth_url = (
         f"https://www.tiktok.com/auth/authorize/"
         f"?client_key={client_key}"
         f"&response_type=code"
-        f"&redirect_uri={redirect_uri}"  # No query parameters in the redirect_uri itself
+        f"&redirect_uri={redirect_uri}"
         f"&scope=user.info.basic"
-        f"&state={request.session.session_key}"  # State as a separate parameter
+        f"&state={request.session.session_key}"
     )
     
     print(f"Redirecting to TikTok auth URL: {auth_url}", file=sys.stderr)
