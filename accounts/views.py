@@ -197,21 +197,21 @@ def tiktok_callback(request):
         username = None
         profile_picture = None
         
-        # Try TikTok v2 user info endpoint
+        # Try TikTok v2 user info endpoint with different approach
         try:
-            user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+            # Using the user.info endpoint without /v2/ prefix first
+            user_info_url = "https://open.tiktokapis.com/user/info/"
             headers = {
                 'Authorization': f'Bearer {access_token}',
                 'Content-Type': 'application/json'
-                # Removed Accept header to match TikTok's expectations
             }
             
-            # Updated fields to match TikTok's current API expectations
+            # Simplified fields request
             data = {
-                'fields': ['open_id', 'username', 'avatar_url', 'display_name']
+                'fields': ['open_id', 'avatar_url', 'display_name']
             }
             
-            print("Attempting to fetch user info with v2 endpoint", file=sys.stderr)
+            print("Attempting to fetch user info with alternative endpoint", file=sys.stderr)
             print(f"User info URL: {user_info_url}", file=sys.stderr)
             print(f"User info headers: {headers}", file=sys.stderr)
             print(f"User info data: {data}", file=sys.stderr)
@@ -224,20 +224,47 @@ def tiktok_callback(request):
             
             if user_response.status_code == 200:
                 user_data = user_response.json().get('data', {})
-                # Check for username field first, then fallback to display_name
-                username = user_data.get('username', user_data.get('display_name', ''))
+                username = user_data.get('display_name', '')
                 profile_picture = user_data.get('avatar_url', '')
                 
                 if username:
                     success = True
-                    print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
-            
-        except Exception as e:
-            print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
+                    print(f"Successfully retrieved user info from alternative endpoint", file=sys.stderr)
         
-        # If v2 endpoint failed, use fallback
+        except Exception as e:
+            print(f"Error accessing alternative user info endpoint: {str(e)}", file=sys.stderr)
+
+        # If first attempt failed, try the v2 endpoint again with minimal fields
         if not success:
-            print("V2 endpoint failed, using generic username", file=sys.stderr)
+            try:
+                user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+                headers = {
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json'
+                }
+                
+                # Try with minimal fields
+                data = {
+                    'fields': ['display_name']
+                }
+                
+                print("Attempting to fetch user info with v2 endpoint (minimal fields)", file=sys.stderr)
+                user_response = requests.post(user_info_url, headers=headers, json=data)
+                
+                if user_response.status_code == 200:
+                    user_data = user_response.json().get('data', {})
+                    username = user_data.get('display_name', '')
+                    
+                    if username:
+                        success = True
+                        print(f"Successfully retrieved username from v2 endpoint", file=sys.stderr)
+            
+            except Exception as e:
+                print(f"Error accessing v2 user info endpoint with minimal fields: {str(e)}", file=sys.stderr)
+        
+        # If both attempts failed, use fallback with open_id
+        if not success:
+            print("API endpoints failed, using open_id fallback", file=sys.stderr)
             username = f"TikTok User {open_id[:8]}" if open_id else "TikTok User"
             profile_picture = ""
         
