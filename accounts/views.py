@@ -202,12 +202,13 @@ def tiktok_callback(request):
             user_info_url = "https://open.tiktokapis.com/v2/user/info/"
             headers = {
                 'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Type': 'application/json'
+                # Removed Accept header to match TikTok's expectations
             }
             
+            # Updated fields to match TikTok's current API expectations
             data = {
-                'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
+                'fields': ['open_id', 'username', 'avatar_url', 'display_name']
             }
             
             print("Attempting to fetch user info with v2 endpoint", file=sys.stderr)
@@ -223,7 +224,8 @@ def tiktok_callback(request):
             
             if user_response.status_code == 200:
                 user_data = user_response.json().get('data', {})
-                username = user_data.get('display_name', '')
+                # Check for username field first, then fallback to display_name
+                username = user_data.get('username', user_data.get('display_name', ''))
                 profile_picture = user_data.get('avatar_url', '')
                 
                 if username:
