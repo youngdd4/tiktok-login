@@ -74,7 +74,7 @@ def tiktok_login(request):
     auth_url = 'https://www.tiktok.com/v2/auth/authorize/'
     auth_url += f'?client_key={client_key}'
     auth_url += '&response_type=code'
-    auth_url += '&scope=user.info.basic'
+    auth_url += '&scope=user.info.basic,user.info.profile,user.info.stats,video.list'
     auth_url += f'&redirect_uri={clean_redirect_uri}'
     auth_url += f'&state={csrf_state}'
     
@@ -208,7 +208,7 @@ def tiktok_callback(request):
             
             # Simplified fields request
             data = {
-                'fields': ['open_id', 'avatar_url', 'display_name']
+                'fields': ['open_id', 'avatar_url', 'display_name', 'profile_deep_link']
             }
             
             print("Attempting to fetch user info with alternative endpoint", file=sys.stderr)
@@ -226,6 +226,7 @@ def tiktok_callback(request):
                 user_data = user_response.json().get('data', {})
                 username = user_data.get('display_name', '')
                 profile_picture = user_data.get('avatar_url', '')
+                profile_deep_link = user_data.get('profile_deep_link', '')
                 
                 if username:
                     success = True
@@ -243,35 +244,98 @@ def tiktok_callback(request):
                     'Content-Type': 'application/json'
                 }
                 
-                # Try with minimal fields
-                data = {
-                    'fields': ['display_name']
-                }
+                # Request more comprehensive user data
+                fields = "open_id,avatar_url,avatar_large_url,display_name,profile_deep_link,bio_description,is_verified,username,follower_count,following_count,likes_count,video_count"
                 
-                print("Attempting to fetch user info with v2 endpoint (minimal fields)", file=sys.stderr)
-                user_response = requests.post(user_info_url, headers=headers, json=data)
+                print("Attempting to fetch user info with v2 endpoint (comprehensive fields)", file=sys.stderr)
+                user_info_url += f"?fields={fields}"
+                
+                user_response = requests.get(user_info_url, headers=headers)
+                
+                print(f"User info response code: {user_response.status_code}", file=sys.stderr)
+                print(f"User info response content: {user_response.text}", file=sys.stderr)
                 
                 if user_response.status_code == 200:
-                    user_data = user_response.json().get('data', {})
-                    username = user_data.get('display_name', '')
-                    
-                    if username:
-                        success = True
-                        print(f"Successfully retrieved username from v2 endpoint", file=sys.stderr)
+                    response_data = user_response.json()
+                    if 'data' in response_data and 'user' in response_data['data']:
+                        user_data = response_data['data']['user']
+                        
+                        # Extract basic profile info
+                        username = user_data.get('display_name', '')
+                        profile_picture = user_data.get('avatar_large_url', '') or user_data.get('avatar_url', '')
+                        profile_deep_link = user_data.get('profile_deep_link', '')
+                        
+                        # Extract additional profile info
+                        bio = user_data.get('bio_description', '')
+                        is_verified = user_data.get('is_verified', False)
+                        tiktok_username = user_data.get('username', '')
+                        
+                        # Extract stats
+                        follower_count = user_data.get('follower_count', 0)
+                        following_count = user_data.get('following_count', 0)
+                        likes_count = user_data.get('likes_count', 0)
+                        video_count = user_data.get('video_count', 0)
+                        
+                        # If we have the display name, consider it a success
+                        if username:
+                            success = True
+                            print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
             
             except Exception as e:
-                print(f"Error accessing v2 user info endpoint with minimal fields: {str(e)}", file=sys.stderr)
+                print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
         
-        # If both attempts failed, use fallback with open_id
+        # If both attempts failed, use fallback with data from token response
         if not success:
-            print("API endpoints failed, using open_id fallback", file=sys.stderr)
-            username = f"TikTok User {open_id[:8]}" if open_id else "TikTok User"
+            print("API endpoints failed, using token response data", file=sys.stderr)
+            
+            # Get scope and other info from token response
+            scope = token_json.get('scope', '')
+            token_type = token_json.get('token_type', '')
+            
+            # Try to extract a more user-friendly identifier from open_id
+            if open_id:
+                # Use first part of open_id for username to make it more readable
+                # Remove any leading hyphens or special characters
+                clean_id = open_id.lstrip('-')
+                
+                # Create a more user-friendly display name
+                username = f"TikTok User {clean_id[:8]}"
+                
+                # Log the data we're working with
+                print(f"Using token data - open_id: {open_id}, scope: {scope}", file=sys.stderr)
+            else:
+                username = "TikTok User"
+            
+            # No profile picture available when using fallback
             profile_picture = ""
         
         # Store user info in session instead of database
         request.session['tiktok_username'] = username
         request.session['tiktok_profile_picture'] = profile_picture
         request.session['tiktok_authenticated'] = True
+        # Store additional TikTok data that might be useful
+        request.session['tiktok_scope'] = token_json.get('scope', '')
+        
+        # Store profile deep link if available
+        if 'profile_deep_link' in locals() and profile_deep_link:
+            request.session['tiktok_profile_deep_link'] = profile_deep_link
+            
+        # Store additional profile data if available
+        if 'bio' in locals() and bio:
+            request.session['tiktok_bio'] = bio
+        
+        if 'is_verified' in locals():
+            request.session['tiktok_is_verified'] = is_verified
+            
+        if 'tiktok_username' in locals() and tiktok_username:
+            request.session['tiktok_handle'] = tiktok_username
+            
+        # Store stats if available
+        if 'follower_count' in locals():
+            request.session['tiktok_follower_count'] = follower_count
+            request.session['tiktok_following_count'] = following_count
+            request.session['tiktok_likes_count'] = likes_count
+            request.session['tiktok_video_count'] = video_count
         
         print(f"Stored in session - Username: {username}", file=sys.stderr)
         print("Login successful, redirecting to dashboard", file=sys.stderr)
@@ -282,7 +346,7 @@ def tiktok_callback(request):
         return HttpResponse(f"Authentication failed: An error occurred during the login process - {str(e)}", status=500)
 
 def dashboard(request):
-    """Display user dashboard with TikTok profile info from session"""
+    """Display user dashboard with TikTok profile info and videos from session"""
     # Check if user is authenticated with TikTok
     if not request.session.get('tiktok_authenticated'):
         return redirect('accounts:login')
@@ -290,8 +354,54 @@ def dashboard(request):
     # Get profile info from session
     context = {
         'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None)
+        'profile_picture': request.session.get('tiktok_profile_picture', None),
+        'profile_deep_link': request.session.get('tiktok_profile_deep_link', None),
+        'bio': request.session.get('tiktok_bio', None),
+        'is_verified': request.session.get('tiktok_is_verified', False),
+        'tiktok_handle': request.session.get('tiktok_handle', None),
+        'follower_count': request.session.get('tiktok_follower_count', 0),
+        'following_count': request.session.get('tiktok_following_count', 0),
+        'likes_count': request.session.get('tiktok_likes_count', 0),
+        'video_count': request.session.get('tiktok_video_count', 0)
     }
+    
+    # Check if we have an access token to fetch videos
+    if 'tiktok_access_token' in request.session:
+        access_token = request.session.get('tiktok_access_token')
+        
+        # Try to fetch TikTok videos
+        try:
+            # API endpoint for videos
+            videos_url = "https://open.tiktokapis.com/v2/video/list/"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Request data - get up to 6 recent videos with specific fields
+            data = {
+                'max_count': 6,
+                'fields': ['id', 'title', 'video_description', 'duration', 'cover_image_url', 'embed_link', 'share_url']
+            }
+            
+            print("Attempting to fetch TikTok videos", file=sys.stderr)
+            videos_response = requests.post(videos_url, headers=headers, json=data)
+            
+            print(f"Videos response code: {videos_response.status_code}", file=sys.stderr)
+            print(f"Videos response content: {videos_response.text}", file=sys.stderr)
+            
+            if videos_response.status_code == 200:
+                videos_data = videos_response.json()
+                videos = videos_data.get('data', {}).get('videos', [])
+                
+                # Add videos to context if available
+                if videos:
+                    context['videos'] = videos
+                    print(f"Successfully fetched {len(videos)} TikTok videos", file=sys.stderr)
+        
+        except Exception as e:
+            print(f"Error fetching TikTok videos: {str(e)}", file=sys.stderr)
+            # Continue without videos
     
     return render(request, 'accounts/dashboard.html', context)
 
@@ -309,7 +419,16 @@ def logout_view(request):
         'tiktok_open_id', 
         'tiktok_username', 
         'tiktok_profile_picture',
-        'tiktok_authenticated'
+        'tiktok_authenticated',
+        'tiktok_scope',
+        'tiktok_profile_deep_link',
+        'tiktok_bio',
+        'tiktok_is_verified',
+        'tiktok_handle',
+        'tiktok_follower_count',
+        'tiktok_following_count',
+        'tiktok_likes_count',
+        'tiktok_video_count'
     ]
     
     for key in keys_to_remove:
