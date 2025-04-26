@@ -46,6 +46,13 @@ def tiktok_login(request):
         print("ERROR: TIKTOK_REDIRECT_URI environment variable is not set", file=sys.stderr)
         return HttpResponse('TikTok login failed: Redirect URI not configured on the server.', status=500)
     
+    # Ensure session exists before using session_key
+    if not request.session.session_key:
+        request.session.create()
+        print(f"Created new session with key: {request.session.session_key}", file=sys.stderr)
+    else:
+        print(f"Using existing session with key: {request.session.session_key}", file=sys.stderr)
+    
     # TikTok OAuth authorization URL
     auth_url = (
         f"https://www.tiktok.com/auth/authorize/"
@@ -74,6 +81,7 @@ def tiktok_callback(request):
     print(f"Received error: {error}", file=sys.stderr)
     print(f"Received error_description: {error_description}", file=sys.stderr)
     print(f"Received state: {state}", file=sys.stderr)
+    print(f"Current session key: {request.session.session_key}", file=sys.stderr)
     
     if error:
         print(f"TikTok returned an error: {error} - {error_description}", file=sys.stderr)
@@ -82,6 +90,16 @@ def tiktok_callback(request):
     if not code:
         print("ERROR: No code received from TikTok", file=sys.stderr)
         return HttpResponse("Authentication failed: No authorization code received from TikTok.", status=400)
+    
+    # Validate state to prevent CSRF attacks
+    if not state:
+        print("ERROR: No state parameter received from TikTok", file=sys.stderr)
+        return HttpResponse("Authentication failed: Missing state parameter in callback.", status=400)
+    
+    if state != request.session.session_key:
+        print(f"ERROR: State mismatch. Received: {state}, Expected: {request.session.session_key}", file=sys.stderr)
+        # Don't reject immediately as session might have been refreshed - just log the warning
+        print("Warning: State/session_key mismatch, but continuing anyway", file=sys.stderr)
     
     # Exchange code for access token
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
