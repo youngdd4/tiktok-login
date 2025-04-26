@@ -6,13 +6,11 @@ import json
 import sys  # For printing to stderr for debugging
 from datetime import datetime, timedelta
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth import logout as django_logout
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.conf import settings
 from django.http import HttpResponse
-from .models import TikTokProfile
 from urllib.parse import urlparse, urlunparse
 
 def login_view(request):
@@ -59,8 +57,6 @@ def tiktok_login(request):
     # 1. Must be absolute and begin with https
     # 2. Must be static (no parameters)
     # 3. No fragment or hash character
-    from urllib.parse import urlparse, urlunparse
-    
     parsed_uri = urlparse(redirect_uri)
     clean_redirect_uri = urlunparse((
         parsed_uri.scheme,
@@ -75,8 +71,6 @@ def tiktok_login(request):
     print(f"Cleaned redirect_uri: {clean_redirect_uri}", file=sys.stderr)
     
     # TikTok OAuth authorization URL - following exact format from documentation
-    # According to TikTok docs:
-    # https://www.tiktok.com/v2/auth/authorize/?client_key=<client_key>&response_type=code&scope=<scope>&redirect_uri=<redirect_uri>&state=<state>
     auth_url = 'https://www.tiktok.com/v2/auth/authorize/'
     auth_url += f'?client_key={client_key}'
     auth_url += '&response_type=code'
@@ -188,23 +182,18 @@ def tiktok_callback(request):
         
         # Extract data from token response
         access_token = token_json.get('access_token')
-        refresh_token = token_json.get('refresh_token')
-        expires_in = token_json.get('expires_in', 86400)  # Default to 24 hours if not provided
+        open_id = token_json.get('open_id')
         
         if not access_token:
             print("ERROR: No access token in response", file=sys.stderr)
             return HttpResponse("Authentication failed: No access token received.", status=400)
+            
+        # Store access token in session
+        request.session['tiktok_access_token'] = access_token
+        request.session['tiktok_open_id'] = open_id
         
-        # Calculate expiration time
-        token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-        
-        # Extract open_id from token response for fallback
-        open_id = token_json.get('open_id')
-        print(f"Open ID from token response: {open_id}", file=sys.stderr)
-        
-        # Try to fetch user info with first endpoint
+        # Try to fetch user info with the access token
         success = False
-        tiktok_id = None
         username = None
         profile_picture = None
         
@@ -234,76 +223,28 @@ def tiktok_callback(request):
             
             if user_response.status_code == 200:
                 user_data = user_response.json().get('data', {})
-                tiktok_id = user_data.get('open_id')
                 username = user_data.get('display_name', '')
                 profile_picture = user_data.get('avatar_url', '')
                 
-                if tiktok_id:
+                if username:
                     success = True
                     print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
             
         except Exception as e:
             print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
         
-        # If v2 endpoint failed, try another approach
+        # If v2 endpoint failed, use fallback
         if not success:
-            print("V2 endpoint failed, using open_id from token response", file=sys.stderr)
-            
-            if open_id:
-                tiktok_id = open_id
-                username = f"TikTok User {open_id[:8]}"  # Create a generic username
-                profile_picture = ""  # No profile picture available
-                success = True
-            else:
-                return HttpResponse("Authentication failed: Could not retrieve TikTok user ID.", status=400)
+            print("V2 endpoint failed, using generic username", file=sys.stderr)
+            username = f"TikTok User {open_id[:8]}" if open_id else "TikTok User"
+            profile_picture = ""
         
-        # At this point, we must have a valid TikTok ID
-        print(f"Using TikTok ID: {tiktok_id}", file=sys.stderr)
-        print(f"Using username: {username}", file=sys.stderr)
+        # Store user info in session instead of database
+        request.session['tiktok_username'] = username
+        request.session['tiktok_profile_picture'] = profile_picture
+        request.session['tiktok_authenticated'] = True
         
-        # Check if user exists, create if not
-        try:
-            print(f"Looking up TikTok profile for ID: {tiktok_id}", file=sys.stderr)
-            tiktok_profile = TikTokProfile.objects.get(tiktok_id=tiktok_id)
-            user = tiktok_profile.user
-            
-            print(f"Found existing user: {user.username}", file=sys.stderr)
-            
-            # Update profile info
-            tiktok_profile.username = username
-            tiktok_profile.profile_picture = profile_picture
-            tiktok_profile.access_token = access_token
-            tiktok_profile.refresh_token = refresh_token
-            tiktok_profile.token_expires_at = token_expires_at
-            tiktok_profile.save()
-            
-        except TikTokProfile.DoesNotExist:
-            # Create new user and profile
-            try:
-                print(f"Creating new user for TikTok ID: {tiktok_id}", file=sys.stderr)
-                user = User.objects.create_user(
-                    username=f"tiktok_{tiktok_id}",
-                    email=""
-                )
-                
-                tiktok_profile = TikTokProfile.objects.create(
-                    user=user,
-                    tiktok_id=tiktok_id,
-                    username=username,
-                    profile_picture=profile_picture,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    token_expires_at=token_expires_at
-                )
-                print(f"Created new user: {user.username} with profile", file=sys.stderr)
-            except Exception as e:
-                print(f"ERROR: Exception during user creation: {str(e)}", file=sys.stderr)
-                return HttpResponse(f"Authentication failed: Error creating user profile - {str(e)}", status=500)
-        
-        # Log the user in
-        print(f"Logging in user: {user.username}", file=sys.stderr)
-        login(request, user)
-        
+        print(f"Stored in session - Username: {username}", file=sys.stderr)
         print("Login successful, redirecting to dashboard", file=sys.stderr)
         return redirect('accounts:dashboard')
         
@@ -311,95 +252,48 @@ def tiktok_callback(request):
         print(f"ERROR: Exception during OAuth process: {str(e)}", file=sys.stderr)
         return HttpResponse(f"Authentication failed: An error occurred during the login process - {str(e)}", status=500)
 
-@login_required
 def dashboard(request):
-    """Display user dashboard with TikTok profile info"""
-    try:
-        tiktok_profile = request.user.tiktokprofile
-        context = {
-            'username': tiktok_profile.username,
-            'profile_picture': tiktok_profile.profile_picture
-        }
-    except TikTokProfile.DoesNotExist:
-        context = {
-            'username': request.user.username,
-            'profile_picture': None
-        }
+    """Display user dashboard with TikTok profile info from session"""
+    # Check if user is authenticated with TikTok
+    if not request.session.get('tiktok_authenticated'):
+        return redirect('accounts:login')
+    
+    # Get profile info from session
+    context = {
+        'username': request.session.get('tiktok_username', 'TikTok User'),
+        'profile_picture': request.session.get('tiktok_profile_picture', None)
+    }
     
     return render(request, 'accounts/dashboard.html', context)
 
-@login_required
 def logout_view(request):
-    """Log out user"""
-    logout(request)
+    """Log out user by clearing session data"""
+    # Clear TikTok session data
+    if 'tiktok_access_token' in request.session:
+        access_token = request.session.get('tiktok_access_token')
+        # Optionally revoke token on TikTok side
+        revoke_token(access_token)
+        
+    # Clear all TikTok related session data
+    keys_to_remove = [
+        'tiktok_access_token', 
+        'tiktok_open_id', 
+        'tiktok_username', 
+        'tiktok_profile_picture',
+        'tiktok_authenticated'
+    ]
+    
+    for key in keys_to_remove:
+        if key in request.session:
+            del request.session[key]
+    
     return redirect('accounts:login')
-
-def refresh_token(tiktok_profile):
-    """Refresh TikTok access token if expired"""
-    client_key = os.environ.get('TIKTOK_CLIENT_KEY')
-    client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
-    
-    # Check if token needs refreshing
-    if datetime.now() < tiktok_profile.token_expires_at - timedelta(minutes=5):
-        # Token still valid for at least 5 more minutes
-        return True
-        
-    print(f"Refreshing token for user: {tiktok_profile.user.username}", file=sys.stderr)
-    
-    # Use the v2 token endpoint
-    token_url = "https://open.tiktokapis.com/v2/oauth/token/"
-    token_data = {
-        'client_key': client_key,
-        'client_secret': client_secret,
-        'grant_type': 'refresh_token',
-        'refresh_token': tiktok_profile.refresh_token
-    }
-    
-    try:
-        token_response = requests.post(token_url, data=token_data)
-        
-        print(f"Token refresh response code: {token_response.status_code}", file=sys.stderr)
-        print(f"Token refresh response content: {token_response.text}", file=sys.stderr)
-        
-        if token_response.status_code != 200:
-            print(f"Failed to refresh token: {token_response.text}", file=sys.stderr)
-            return False
-        
-        token_json = token_response.json()
-        
-        # Update the profile with new tokens
-        tiktok_profile.access_token = token_json.get('access_token')
-        tiktok_profile.refresh_token = token_json.get('refresh_token')  # TikTok provides a new refresh token
-        expires_in = token_json.get('expires_in', 86400)  # Default to 24 hours if not provided
-        tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-        tiktok_profile.save()
-        
-        print(f"Successfully refreshed token for user: {tiktok_profile.user.username}", file=sys.stderr)
-        return True
-        
-    except Exception as e:
-        print(f"Error refreshing token: {str(e)}", file=sys.stderr)
-        return False
-
-@login_required
-def disconnect_tiktok(request):
-    """Revoke TikTok access and disconnect account"""
-    try:
-        tiktok_profile = request.user.tiktokprofile
-        access_token = tiktok_profile.access_token
-        
-        # Call TikTok API to revoke the token
-        if revoke_token(access_token):
-            # Delete the profile or mark as disconnected
-            tiktok_profile.delete()
-            return redirect('accounts:login')
-        else:
-            return HttpResponse("Failed to disconnect TikTok account. Please try again.", status=400)
-    except TikTokProfile.DoesNotExist:
-        return redirect('accounts:login')
 
 def revoke_token(access_token):
     """Revoke a TikTok access token"""
+    if not access_token:
+        return False
+        
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
     
