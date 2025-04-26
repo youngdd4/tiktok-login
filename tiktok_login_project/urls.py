@@ -23,6 +23,6 @@ urlpatterns = [
   
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),  # Include accounts URLs at root
-    path('', lambda request: redirect('accounts:login'), name='home'),  # Add this line for root URL redirect
+    path('', lambda request: redirect('accounts:login'), name='home'),  # Updated with namespace
 
 ]
