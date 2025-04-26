@@ -16,7 +16,7 @@ from .models import TikTokProfile
 
 def login_view(request):
     """Display login page with TikTok OAuth button"""
-    # Debug environment variables
+    # Debug environment variables - only logs to server, not browser
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
     print("Environment check in login_view:", file=sys.stderr)
@@ -28,22 +28,23 @@ def login_view(request):
 
 def tiktok_login(request):
     """Redirect user to TikTok for authorization"""
+    print("=== INSIDE TIKTOK_LOGIN VIEW ===", file=sys.stderr)
+    
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
     
-    # Debug info
-    print("tiktok_login view called", file=sys.stderr)
-    print(f"TIKTOK_CLIENT_KEY: {client_key[:5]}...{client_key[-5:] if client_key else 'None'}", file=sys.stderr)
+    print(f"Environment variables:", file=sys.stderr)
+    print(f"TIKTOK_CLIENT_KEY: {'SET' if client_key else 'NOT SET'}", file=sys.stderr)
     print(f"TIKTOK_REDIRECT_URI: {redirect_uri}", file=sys.stderr)
     
     # Check if required environment variables are set
     if not client_key:
         print("ERROR: TIKTOK_CLIENT_KEY environment variable is not set", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'TikTok login failed: Client key not configured on the server.'})
+        return HttpResponse('TikTok login failed: Client key not configured on the server.', status=500)
     
     if not redirect_uri:
         print("ERROR: TIKTOK_REDIRECT_URI environment variable is not set", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'TikTok login failed: Redirect URI not configured on the server.'})
+        return HttpResponse('TikTok login failed: Redirect URI not configured on the server.', status=500)
     
     # TikTok OAuth authorization URL
     auth_url = (
@@ -60,34 +61,42 @@ def tiktok_login(request):
 
 def tiktok_callback(request):
     """Handle callback from TikTok OAuth"""
-    code = request.GET.get('code')
+    print("=== INSIDE TIKTOK CALLBACK VIEW ===", file=sys.stderr)
+    print(f"Request method: {request.method}", file=sys.stderr)
+    print(f"Request GET params: {request.GET}", file=sys.stderr)
     
-    # Debug print statements
-    print("TikTok callback received. Code present:", bool(code), file=sys.stderr)
+    code = request.GET.get('code')
+    error = request.GET.get('error')
+    error_description = request.GET.get('error_description')
+    state = request.GET.get('state')
+    
+    print(f"Received code: {code}", file=sys.stderr)
+    print(f"Received error: {error}", file=sys.stderr)
+    print(f"Received error_description: {error_description}", file=sys.stderr)
+    print(f"Received state: {state}", file=sys.stderr)
+    
+    if error:
+        print(f"TikTok returned an error: {error} - {error_description}", file=sys.stderr)
+        return HttpResponse(f"TikTok returned an error: {error} - {error_description}", status=400)
     
     if not code:
         print("ERROR: No code received from TikTok", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: No authorization code received from TikTok.'})
+        return HttpResponse("Authentication failed: No authorization code received from TikTok.", status=400)
     
     # Exchange code for access token
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
     redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
     
+    print(f"Environment variables:", file=sys.stderr)
+    print(f"TIKTOK_CLIENT_KEY: {'SET' if client_key else 'NOT SET'}", file=sys.stderr)
+    print(f"TIKTOK_CLIENT_SECRET: {'SET' if client_secret else 'NOT SET'}", file=sys.stderr)
+    print(f"TIKTOK_REDIRECT_URI: {redirect_uri}", file=sys.stderr)
+    
     # Check for required environment variables
-    if not client_key:
-        print("ERROR: TIKTOK_CLIENT_KEY environment variable is not set", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: Client key not configured on the server.'})
-    
-    if not client_secret:
-        print("ERROR: TIKTOK_CLIENT_SECRET environment variable is not set", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: Client secret not configured on the server.'})
-    
-    if not redirect_uri:
-        print("ERROR: TIKTOK_REDIRECT_URI environment variable is not set", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: Redirect URI not configured on the server.'})
-    
-    print(f"Using redirect URI: {redirect_uri}", file=sys.stderr)
+    if not client_key or not client_secret or not redirect_uri:
+        print("ERROR: Missing required environment variables", file=sys.stderr)
+        return HttpResponse("Authentication failed: Server configuration issue.", status=500)
     
     token_url = "https://open.tiktokapis.com/v2/oauth/token/"
     token_data = {
@@ -98,80 +107,107 @@ def tiktok_callback(request):
         'redirect_uri': redirect_uri
     }
     
-    print("Attempting to exchange code for token...", file=sys.stderr)
-    token_response = requests.post(token_url, data=token_data)
+    print("Attempting token exchange with data:", file=sys.stderr)
+    print(f"client_key: {client_key[:5]}...{client_key[-5:] if client_key else ''}", file=sys.stderr)
+    print(f"client_secret: {'[REDACTED]'}", file=sys.stderr)  # Don't log the secret
+    print(f"code: {code[:5]}...{code[-5:] if code and len(code) > 10 else code}", file=sys.stderr)
+    print(f"redirect_uri: {redirect_uri}", file=sys.stderr)
     
-    print(f"Token exchange response: {token_response.status_code}", file=sys.stderr)
-    print(f"Token response content: {token_response.text}", file=sys.stderr)
-    
-    if token_response.status_code != 200:
-        print(f"ERROR: Failed to exchange code for token. Status: {token_response.status_code}", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: Could not exchange authorization code for access token.'})
-    
-    token_json = token_response.json()
-    access_token = token_json.get('access_token')
-    refresh_token = token_json.get('refresh_token')
-    expires_in = token_json.get('expires_in')
-    
-    # Fetch user info using the access token
-    user_info_url = "https://open.tiktokapis.com/v2/user/info/"
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
-    }
-    
-    print("Attempting to fetch user info...", file=sys.stderr)
-    user_response = requests.post(user_info_url, headers=headers, json=data)
-    
-    print(f"User info response: {user_response.status_code}", file=sys.stderr)
-    print(f"User info content: {user_response.text}", file=sys.stderr)
-    
-    if user_response.status_code != 200:
-        print(f"ERROR: Failed to retrieve user info. Status: {user_response.status_code}", file=sys.stderr)
-        return render(request, 'accounts/error.html', {'error_message': 'Authentication failed: Could not retrieve user information from TikTok.'})
-    
-    user_data = user_response.json().get('data', {})
-    tiktok_id = user_data.get('open_id')
-    username = user_data.get('display_name', '')
-    profile_picture = user_data.get('avatar_url', '')
-    
-    # Check if user exists, create if not
     try:
-        tiktok_profile = TikTokProfile.objects.get(tiktok_id=tiktok_id)
-        user = tiktok_profile.user
+        token_response = requests.post(token_url, data=token_data)
         
-        # Update profile info
-        tiktok_profile.username = username
-        tiktok_profile.profile_picture = profile_picture
-        tiktok_profile.access_token = access_token
-        tiktok_profile.refresh_token = refresh_token
-        tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
-        tiktok_profile.save()
+        print(f"Token exchange response code: {token_response.status_code}", file=sys.stderr)
+        print(f"Token exchange response headers: {token_response.headers}", file=sys.stderr)
+        print(f"Token exchange response content: {token_response.text}", file=sys.stderr)
         
-    except TikTokProfile.DoesNotExist:
-        # Create new user and profile
-        user = User.objects.create_user(
-            username=f"tiktok_{tiktok_id}",
-            email=""
-        )
+        if token_response.status_code != 200:
+            print(f"ERROR: Failed to exchange code for token. Status: {token_response.status_code}", file=sys.stderr)
+            return HttpResponse(f"Failed to exchange code for token. Status: {token_response.status_code}. Response: {token_response.text}", status=400)
         
-        tiktok_profile = TikTokProfile.objects.create(
-            user=user,
-            tiktok_id=tiktok_id,
-            username=username,
-            profile_picture=profile_picture,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_expires_at=datetime.now() + timedelta(seconds=expires_in)
-        )
-    
-    # Log the user in
-    login(request, user)
-    
-    return redirect('accounts:dashboard')
+        token_json = token_response.json()
+        access_token = token_json.get('access_token')
+        refresh_token = token_json.get('refresh_token')
+        expires_in = token_json.get('expires_in')
+        
+        # Fetch user info using the access token
+        user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
+        }
+        
+        print("Attempting to fetch user info with access token", file=sys.stderr)
+        user_response = requests.post(user_info_url, headers=headers, json=data)
+        
+        print(f"User info response code: {user_response.status_code}", file=sys.stderr)
+        print(f"User info response headers: {user_response.headers}", file=sys.stderr)
+        print(f"User info response content: {user_response.text}", file=sys.stderr)
+        
+        if user_response.status_code != 200:
+            print(f"ERROR: Failed to retrieve user info. Status: {user_response.status_code}", file=sys.stderr)
+            return HttpResponse(f"Failed to retrieve user info. Status: {user_response.status_code}. Response: {user_response.text}", status=400)
+        
+        user_data = user_response.json().get('data', {})
+        tiktok_id = user_data.get('open_id')
+        username = user_data.get('display_name', '')
+        profile_picture = user_data.get('avatar_url', '')
+        
+        if not tiktok_id:
+            print("ERROR: No open_id in TikTok response", file=sys.stderr)
+            return HttpResponse("Authentication failed: Could not retrieve TikTok user ID.", status=400)
+        
+        # Check if user exists, create if not
+        try:
+            print(f"Looking up TikTok profile for ID: {tiktok_id}", file=sys.stderr)
+            tiktok_profile = TikTokProfile.objects.get(tiktok_id=tiktok_id)
+            user = tiktok_profile.user
+            
+            print(f"Found existing user: {user.username}", file=sys.stderr)
+            
+            # Update profile info
+            tiktok_profile.username = username
+            tiktok_profile.profile_picture = profile_picture
+            tiktok_profile.access_token = access_token
+            tiktok_profile.refresh_token = refresh_token
+            tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+            tiktok_profile.save()
+            
+        except TikTokProfile.DoesNotExist:
+            # Create new user and profile
+            try:
+                print(f"Creating new user for TikTok ID: {tiktok_id}", file=sys.stderr)
+                user = User.objects.create_user(
+                    username=f"tiktok_{tiktok_id}",
+                    email=""
+                )
+                
+                tiktok_profile = TikTokProfile.objects.create(
+                    user=user,
+                    tiktok_id=tiktok_id,
+                    username=username,
+                    profile_picture=profile_picture,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=datetime.now() + timedelta(seconds=expires_in)
+                )
+                print(f"Created new user: {user.username} with profile", file=sys.stderr)
+            except Exception as e:
+                print(f"ERROR: Exception during user creation: {str(e)}", file=sys.stderr)
+                return HttpResponse(f"Authentication failed: Error creating user profile - {str(e)}", status=500)
+        
+        # Log the user in
+        print(f"Logging in user: {user.username}", file=sys.stderr)
+        login(request, user)
+        
+        print("Login successful, redirecting to dashboard", file=sys.stderr)
+        return redirect('accounts:dashboard')
+        
+    except Exception as e:
+        print(f"ERROR: Exception during OAuth process: {str(e)}", file=sys.stderr)
+        return HttpResponse(f"Authentication failed: An error occurred during the login process - {str(e)}", status=500)
 
 @login_required
 def dashboard(request):
