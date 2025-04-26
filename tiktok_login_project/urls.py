@@ -18,9 +18,10 @@ from django.contrib import admin
 from django.urls import path
 from django.http import HttpResponse
 
-def home(request):
-    return HttpResponse("Welcome to Emmanuel Tech!")
+def health_check(request):
+    return HttpResponse("App is running!")
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    
+    # Your existing URLs
+    path('health/', health_check, name='health_check'),
 ]
