@@ -1,0 +1,1 @@
+web: gunicorn tiktok_login_project.wsgi --log-file -

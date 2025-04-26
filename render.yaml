@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: tiktok-oauth-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn tiktok_login_project.wsgi:application
+    envVars:
+      - key: DEBUG
+        value: False
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: "your-app-name.onrender.com"
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+      - key: TIKTOK_REDIRECT_URI
+        value: "https://your-app-name.onrender.com/accounts/login/tiktok/callback/"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tiktok-app-db
+          property: connectionString
+
+databases:
+  - name: tiktok-app-db
+    plan: free
