@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.http import HttpResponse
 from .models import TikTokProfile
+from urllib.parse import urlparse, urlunparse
 
 def login_view(request):
     """Display login page with TikTok OAuth button"""
@@ -53,22 +54,30 @@ def tiktok_login(request):
     else:
         print(f"Using existing session with key: {request.session.session_key}", file=sys.stderr)
     
-    # Ensure redirect_uri does not already contain query parameters
-    if '?' in redirect_uri:
-        print("WARNING: redirect_uri already contains query parameters, removing them", file=sys.stderr)
-        redirect_uri = redirect_uri.split('?')[0]
-
-    # Clean redirect_uri to ensure it doesn't have trailing slash if followed by parameters
-    if redirect_uri.endswith('/'):
-        # Remove the trailing slash to prevent double slashes
-        redirect_uri = redirect_uri.rstrip('/')
+    # Get the base redirect URI without ANY query parameters
+    # This is more thorough than just checking for '?'
+    parsed_uri = urlparse(redirect_uri)
+    clean_redirect_uri = urlunparse((
+        parsed_uri.scheme,
+        parsed_uri.netloc,
+        parsed_uri.path,
+        '',  # params
+        '',  # query - explicitly empty
+        ''   # fragment
+    ))
+    
+    # Remove trailing slash if present
+    clean_redirect_uri = clean_redirect_uri.rstrip('/')
+    
+    print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
+    print(f"Cleaned redirect_uri: {clean_redirect_uri}", file=sys.stderr)
     
     # TikTok OAuth authorization URL
     auth_url = (
         f"https://www.tiktok.com/auth/authorize/"
         f"?client_key={client_key}"
         f"&response_type=code"
-        f"&redirect_uri={redirect_uri}"
+        f"&redirect_uri={clean_redirect_uri}"
         f"&scope=user.info.basic"
         f"&state={request.session.session_key}"
     )
