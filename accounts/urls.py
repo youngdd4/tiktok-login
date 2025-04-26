@@ -4,6 +4,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('', views.home, name='home'),  # Add this line for root URL
     path('login/', views.login_view, name='login'),
     path('login/tiktok/', views.tiktok_login, name='tiktok_login'),
     path('login/tiktok/callback/', views.tiktok_callback, name='tiktok_callback'),
