@@ -47,40 +47,42 @@ def tiktok_login(request):
         print("ERROR: TIKTOK_REDIRECT_URI environment variable is not set", file=sys.stderr)
         return HttpResponse('TikTok login failed: Redirect URI not configured on the server.', status=500)
     
-    # Ensure session exists before using session_key
+    # Ensure session exists before using session_key as CSRF state token
     if not request.session.session_key:
         request.session.create()
-        print(f"Created new session with key: {request.session.session_key}", file=sys.stderr)
-    else:
-        print(f"Using existing session with key: {request.session.session_key}", file=sys.stderr)
     
-    # Get the base redirect URI without ANY query parameters
-    # This is more thorough than just checking for '?'
+    # Generate a secure CSRF state token and store it in the session
+    csrf_state = request.session.session_key
+    print(f"Using state token: {csrf_state}", file=sys.stderr)
+    
+    # Clean the redirect URI according to TikTok's requirements:
+    # 1. Must be absolute and begin with https
+    # 2. Must be static (no parameters)
+    # 3. No fragment or hash character
+    from urllib.parse import urlparse, urlunparse
+    
     parsed_uri = urlparse(redirect_uri)
     clean_redirect_uri = urlunparse((
         parsed_uri.scheme,
         parsed_uri.netloc,
-        parsed_uri.path,
+        parsed_uri.path.rstrip('/'),  # Remove trailing slash
         '',  # params
-        '',  # query - explicitly empty
-        ''   # fragment
+        '',  # query - must be empty per TikTok docs
+        ''   # fragment - must be empty per TikTok docs
     ))
-    
-    # Remove trailing slash if present
-    clean_redirect_uri = clean_redirect_uri.rstrip('/')
     
     print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
     print(f"Cleaned redirect_uri: {clean_redirect_uri}", file=sys.stderr)
     
-    # TikTok OAuth authorization URL
-    auth_url = (
-        f"https://www.tiktok.com/auth/authorize/"
-        f"?client_key={client_key}"
-        f"&response_type=code"
-        f"&redirect_uri={clean_redirect_uri}"
-        f"&scope=user.info.basic"
-        f"&state={request.session.session_key}"
-    )
+    # TikTok OAuth authorization URL - following exact format from documentation
+    # According to TikTok docs:
+    # https://www.tiktok.com/v2/auth/authorize/?client_key=<client_key>&response_type=code&scope=<scope>&redirect_uri=<redirect_uri>&state=<state>
+    auth_url = 'https://www.tiktok.com/v2/auth/authorize/'
+    auth_url += f'?client_key={client_key}'
+    auth_url += '&response_type=code'
+    auth_url += '&scope=user.info.basic'
+    auth_url += f'&redirect_uri={clean_redirect_uri}'
+    auth_url += f'&state={csrf_state}'
     
     print(f"Redirecting to TikTok auth URL: {auth_url}", file=sys.stderr)
     return redirect(auth_url)
@@ -91,36 +93,41 @@ def tiktok_callback(request):
     print(f"Request method: {request.method}", file=sys.stderr)
     print(f"Request GET params: {request.GET}", file=sys.stderr)
     
+    # Get parameters from the callback
     code = request.GET.get('code')
     error = request.GET.get('error')
     error_description = request.GET.get('error_description')
     state = request.GET.get('state')
+    scopes = request.GET.get('scopes')
     
     print(f"Received code: {code}", file=sys.stderr)
     print(f"Received error: {error}", file=sys.stderr)
     print(f"Received error_description: {error_description}", file=sys.stderr)
     print(f"Received state: {state}", file=sys.stderr)
+    print(f"Received scopes: {scopes}", file=sys.stderr)
     print(f"Current session key: {request.session.session_key}", file=sys.stderr)
     
+    # If error is present, authorization failed
     if error:
         print(f"TikTok returned an error: {error} - {error_description}", file=sys.stderr)
         return HttpResponse(f"TikTok returned an error: {error} - {error_description}", status=400)
     
+    # Check if code was returned
     if not code:
         print("ERROR: No code received from TikTok", file=sys.stderr)
         return HttpResponse("Authentication failed: No authorization code received from TikTok.", status=400)
     
-    # Validate state to prevent CSRF attacks
+    # Validate state to prevent CSRF attacks - critical security check
     if not state:
         print("ERROR: No state parameter received from TikTok", file=sys.stderr)
         return HttpResponse("Authentication failed: Missing state parameter in callback.", status=400)
     
+    # Strict state validation - must match exactly
     if state != request.session.session_key:
         print(f"ERROR: State mismatch. Received: {state}, Expected: {request.session.session_key}", file=sys.stderr)
-        # Don't reject immediately as session might have been refreshed - just log the warning
-        print("Warning: State/session_key mismatch, but continuing anyway", file=sys.stderr)
+        return HttpResponse("Authentication failed: Invalid state parameter. This could be a CSRF attack attempt.", status=400)
     
-    # Exchange code for access token
+    # Get environment variables for token exchange
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
     redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
@@ -135,19 +142,28 @@ def tiktok_callback(request):
         print("ERROR: Missing required environment variables", file=sys.stderr)
         return HttpResponse("Authentication failed: Server configuration issue.", status=500)
     
-    # Ensure redirect_uri does not contain query parameters
-    if '?' in redirect_uri:
-        print("WARNING: redirect_uri contains query parameters, removing them for token exchange", file=sys.stderr)
-        redirect_uri = redirect_uri.split('?')[0]
-        print(f"Cleaned redirect_uri: {redirect_uri}", file=sys.stderr)
+    # Process redirect_uri to match exactly what was used in the initial request
+    parsed_uri = urlparse(redirect_uri)
+    clean_redirect_uri = urlunparse((
+        parsed_uri.scheme,
+        parsed_uri.netloc,
+        parsed_uri.path.rstrip('/'),  # Remove trailing slash
+        '',  # params
+        '',  # query - must be empty per TikTok docs
+        ''   # fragment - must be empty per TikTok docs
+    ))
     
+    print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
+    print(f"Cleaned redirect_uri for token exchange: {clean_redirect_uri}", file=sys.stderr)
+    
+    # Use the correct token endpoint from docs
     token_url = "https://open.tiktokapis.com/v2/oauth/token/"
     token_data = {
         'client_key': client_key,
         'client_secret': client_secret,
         'code': code,
         'grant_type': 'authorization_code',
-        'redirect_uri': redirect_uri  # Clean redirect_uri without query parameters
+        'redirect_uri': clean_redirect_uri  # Must match the authorization request exactly
     }
     
     print("Attempting token exchange with data:", file=sys.stderr)
