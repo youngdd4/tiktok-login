@@ -183,12 +183,22 @@ def tiktok_callback(request):
             print(f"ERROR: Failed to exchange code for token. Status: {token_response.status_code}", file=sys.stderr)
             return HttpResponse(f"Failed to exchange code for token. Status: {token_response.status_code}. Response: {token_response.text}", status=400)
         
+        # Parse token response
         token_json = token_response.json()
+        
+        # Extract data from token response
         access_token = token_json.get('access_token')
         refresh_token = token_json.get('refresh_token')
-        expires_in = token_json.get('expires_in')
+        expires_in = token_json.get('expires_in', 86400)  # Default to 24 hours if not provided
         
-        # Fetch user info using the access token
+        if not access_token:
+            print("ERROR: No access token in response", file=sys.stderr)
+            return HttpResponse("Authentication failed: No access token received.", status=400)
+        
+        # Calculate expiration time
+        token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        
+        # Fetch user info using the access token with v2 endpoint
         user_info_url = "https://open.tiktokapis.com/v2/user/info/"
         headers = {
             'Authorization': f'Bearer {access_token}',
@@ -209,6 +219,7 @@ def tiktok_callback(request):
             print(f"ERROR: Failed to retrieve user info. Status: {user_response.status_code}", file=sys.stderr)
             return HttpResponse(f"Failed to retrieve user info. Status: {user_response.status_code}. Response: {user_response.text}", status=400)
         
+        # Extract user data from response
         user_data = user_response.json().get('data', {})
         tiktok_id = user_data.get('open_id')
         username = user_data.get('display_name', '')
@@ -231,7 +242,7 @@ def tiktok_callback(request):
             tiktok_profile.profile_picture = profile_picture
             tiktok_profile.access_token = access_token
             tiktok_profile.refresh_token = refresh_token
-            tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+            tiktok_profile.token_expires_at = token_expires_at
             tiktok_profile.save()
             
         except TikTokProfile.DoesNotExist:
@@ -250,7 +261,7 @@ def tiktok_callback(request):
                     profile_picture=profile_picture,
                     access_token=access_token,
                     refresh_token=refresh_token,
-                    token_expires_at=datetime.now() + timedelta(seconds=expires_in)
+                    token_expires_at=token_expires_at
                 )
                 print(f"Created new user: {user.username} with profile", file=sys.stderr)
             except Exception as e:
@@ -296,6 +307,14 @@ def refresh_token(tiktok_profile):
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
     
+    # Check if token needs refreshing
+    if datetime.now() < tiktok_profile.token_expires_at - timedelta(minutes=5):
+        # Token still valid for at least 5 more minutes
+        return True
+        
+    print(f"Refreshing token for user: {tiktok_profile.user.username}", file=sys.stderr)
+    
+    # Use the v2 token endpoint
     token_url = "https://open.tiktokapis.com/v2/oauth/token/"
     token_data = {
         'client_key': client_key,
@@ -304,14 +323,28 @@ def refresh_token(tiktok_profile):
         'refresh_token': tiktok_profile.refresh_token
     }
     
-    token_response = requests.post(token_url, data=token_data)
-    
-    if token_response.status_code == 200:
+    try:
+        token_response = requests.post(token_url, data=token_data)
+        
+        print(f"Token refresh response code: {token_response.status_code}", file=sys.stderr)
+        print(f"Token refresh response content: {token_response.text}", file=sys.stderr)
+        
+        if token_response.status_code != 200:
+            print(f"Failed to refresh token: {token_response.text}", file=sys.stderr)
+            return False
+        
         token_json = token_response.json()
+        
+        # Update the profile with new tokens
         tiktok_profile.access_token = token_json.get('access_token')
-        tiktok_profile.refresh_token = token_json.get('refresh_token')
-        tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=token_json.get('expires_in'))
+        tiktok_profile.refresh_token = token_json.get('refresh_token')  # TikTok provides a new refresh token
+        expires_in = token_json.get('expires_in', 86400)  # Default to 24 hours if not provided
+        tiktok_profile.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
         tiktok_profile.save()
+        
+        print(f"Successfully refreshed token for user: {tiktok_profile.user.username}", file=sys.stderr)
         return True
-    
-    return False
+        
+    except Exception as e:
+        print(f"Error refreshing token: {str(e)}", file=sys.stderr)
+        return False
