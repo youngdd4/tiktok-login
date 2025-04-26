@@ -118,7 +118,7 @@ def tiktok_callback(request):
     # Log the user in
     login(request, user)
     
-    return redirect('dashboard')
+    return redirect('accounts:dashboard')
 
 @login_required
 def dashboard(request):
@@ -141,7 +141,7 @@ def dashboard(request):
 def logout_view(request):
     """Log out user"""
     logout(request)
-    return redirect('login')
+    return redirect('accounts:login')
 
 def refresh_token(tiktok_profile):
     """Refresh TikTok access token if expired"""
@@ -167,7 +167,3 @@ def refresh_token(tiktok_profile):
         return True
     
     return False
-
-def home(request):
-    """Simple home page view to test routing"""
-    return render(request, 'accounts/home.html')

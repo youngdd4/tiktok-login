@@ -6,8 +6,7 @@ from . import views
 app_name = 'accounts'  # Add namespace for URL naming
 
 urlpatterns = [
-    path('', views.home, name='home'),  # Add this line for root URL
-    path('login/', views.login_view, name='login'),
+    path('', views.login_view, name='login'),  # Make login the root URL
     path('login/tiktok/', views.tiktok_login, name='tiktok_login'),
     path('login/tiktok/callback/', views.tiktok_callback, name='tiktok_callback'),
     path('dashboard/', views.dashboard, name='dashboard'),
