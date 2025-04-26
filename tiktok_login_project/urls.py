@@ -23,5 +23,5 @@ def home(request):
 urlpatterns = [
     path('', home, name='home'),  # root URL ('/') points to a simple view
     path('admin/', admin.site.urls),
-    path('accounts/', include('accounts.urls')),  # Include accounts URLs at root
+   
 ]
