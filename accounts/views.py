@@ -53,14 +53,19 @@ def tiktok_login(request):
     else:
         print(f"Using existing session with key: {request.session.session_key}", file=sys.stderr)
     
-    # TikTok OAuth authorization URL
+    # Ensure redirect_uri does not already contain query parameters
+    if '?' in redirect_uri:
+        print("WARNING: redirect_uri already contains query parameters, removing them", file=sys.stderr)
+        redirect_uri = redirect_uri.split('?')[0]
+    
+    # TikTok OAuth authorization URL - CORRECTED to keep state separate from redirect_uri
     auth_url = (
         f"https://www.tiktok.com/auth/authorize/"
         f"?client_key={client_key}"
         f"&response_type=code"
-        f"&redirect_uri={redirect_uri}"
+        f"&redirect_uri={redirect_uri}"  # No query parameters in the redirect_uri itself
         f"&scope=user.info.basic"
-        f"&state={request.session.session_key}"
+        f"&state={request.session.session_key}"  # State as a separate parameter
     )
     
     print(f"Redirecting to TikTok auth URL: {auth_url}", file=sys.stderr)
@@ -116,13 +121,19 @@ def tiktok_callback(request):
         print("ERROR: Missing required environment variables", file=sys.stderr)
         return HttpResponse("Authentication failed: Server configuration issue.", status=500)
     
+    # Ensure redirect_uri does not contain query parameters
+    if '?' in redirect_uri:
+        print("WARNING: redirect_uri contains query parameters, removing them for token exchange", file=sys.stderr)
+        redirect_uri = redirect_uri.split('?')[0]
+        print(f"Cleaned redirect_uri: {redirect_uri}", file=sys.stderr)
+    
     token_url = "https://open.tiktokapis.com/v2/oauth/token/"
     token_data = {
         'client_key': client_key,
         'client_secret': client_secret,
         'code': code,
         'grant_type': 'authorization_code',
-        'redirect_uri': redirect_uri
+        'redirect_uri': redirect_uri  # Clean redirect_uri without query parameters
     }
     
     print("Attempting token exchange with data:", file=sys.stderr)
