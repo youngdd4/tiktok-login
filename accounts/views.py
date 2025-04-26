@@ -168,6 +168,6 @@ def refresh_token(tiktok_profile):
     
     return False
 
-    def home(request):
+def home(request):
     """Simple home page view to test routing"""
     return render(request, 'accounts/home.html')
