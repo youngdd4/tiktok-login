@@ -198,36 +198,68 @@ def tiktok_callback(request):
         # Calculate expiration time
         token_expires_at = datetime.now() + timedelta(seconds=expires_in)
         
-        # Fetch user info using the access token with v2 endpoint
-        user_info_url = "https://open.tiktokapis.com/v2/user/info/"
-        headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
-        }
-        data = {
-            'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
-        }
+        # Extract open_id from token response for fallback
+        open_id = token_json.get('open_id')
+        print(f"Open ID from token response: {open_id}", file=sys.stderr)
         
-        print("Attempting to fetch user info with access token", file=sys.stderr)
-        user_response = requests.post(user_info_url, headers=headers, json=data)
+        # Try to fetch user info with first endpoint
+        success = False
+        tiktok_id = None
+        username = None
+        profile_picture = None
         
-        print(f"User info response code: {user_response.status_code}", file=sys.stderr)
-        print(f"User info response headers: {user_response.headers}", file=sys.stderr)
-        print(f"User info response content: {user_response.text}", file=sys.stderr)
+        # Try TikTok v2 user info endpoint
+        try:
+            user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            
+            data = {
+                'fields': ['open_id', 'union_id', 'avatar_url', 'display_name']
+            }
+            
+            print("Attempting to fetch user info with v2 endpoint", file=sys.stderr)
+            print(f"User info URL: {user_info_url}", file=sys.stderr)
+            print(f"User info headers: {headers}", file=sys.stderr)
+            print(f"User info data: {data}", file=sys.stderr)
+            
+            user_response = requests.post(user_info_url, headers=headers, json=data)
+            
+            print(f"User info response code: {user_response.status_code}", file=sys.stderr)
+            print(f"User info response headers: {user_response.headers}", file=sys.stderr)
+            print(f"User info response content: {user_response.text}", file=sys.stderr)
+            
+            if user_response.status_code == 200:
+                user_data = user_response.json().get('data', {})
+                tiktok_id = user_data.get('open_id')
+                username = user_data.get('display_name', '')
+                profile_picture = user_data.get('avatar_url', '')
+                
+                if tiktok_id:
+                    success = True
+                    print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
+            
+        except Exception as e:
+            print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
         
-        if user_response.status_code != 200:
-            print(f"ERROR: Failed to retrieve user info. Status: {user_response.status_code}", file=sys.stderr)
-            return HttpResponse(f"Failed to retrieve user info. Status: {user_response.status_code}. Response: {user_response.text}", status=400)
+        # If v2 endpoint failed, try another approach
+        if not success:
+            print("V2 endpoint failed, using open_id from token response", file=sys.stderr)
+            
+            if open_id:
+                tiktok_id = open_id
+                username = f"TikTok User {open_id[:8]}"  # Create a generic username
+                profile_picture = ""  # No profile picture available
+                success = True
+            else:
+                return HttpResponse("Authentication failed: Could not retrieve TikTok user ID.", status=400)
         
-        # Extract user data from response
-        user_data = user_response.json().get('data', {})
-        tiktok_id = user_data.get('open_id')
-        username = user_data.get('display_name', '')
-        profile_picture = user_data.get('avatar_url', '')
-        
-        if not tiktok_id:
-            print("ERROR: No open_id in TikTok response", file=sys.stderr)
-            return HttpResponse("Authentication failed: Could not retrieve TikTok user ID.", status=400)
+        # At this point, we must have a valid TikTok ID
+        print(f"Using TikTok ID: {tiktok_id}", file=sys.stderr)
+        print(f"Using username: {username}", file=sys.stderr)
         
         # Check if user exists, create if not
         try:
@@ -347,4 +379,63 @@ def refresh_token(tiktok_profile):
         
     except Exception as e:
         print(f"Error refreshing token: {str(e)}", file=sys.stderr)
+        return False
+
+@login_required
+def disconnect_tiktok(request):
+    """Revoke TikTok access and disconnect account"""
+    try:
+        tiktok_profile = request.user.tiktokprofile
+        access_token = tiktok_profile.access_token
+        
+        # Call TikTok API to revoke the token
+        if revoke_token(access_token):
+            # Delete the profile or mark as disconnected
+            tiktok_profile.delete()
+            return redirect('accounts:login')
+        else:
+            return HttpResponse("Failed to disconnect TikTok account. Please try again.", status=400)
+    except TikTokProfile.DoesNotExist:
+        return redirect('accounts:login')
+
+def revoke_token(access_token):
+    """Revoke a TikTok access token"""
+    client_key = os.environ.get('TIKTOK_CLIENT_KEY')
+    client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
+    
+    if not client_key or not client_secret:
+        print("ERROR: Missing client credentials for token revocation", file=sys.stderr)
+        return False
+    
+    # Use the token revocation endpoint
+    revoke_url = "https://open.tiktokapis.com/v2/oauth/revoke/"
+    
+    revoke_data = {
+        'client_key': client_key,
+        'client_secret': client_secret,
+        'token': access_token
+    }
+    
+    try:
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache'
+        }
+        
+        print(f"Attempting to revoke token", file=sys.stderr)
+        revoke_response = requests.post(revoke_url, data=revoke_data, headers=headers)
+        
+        print(f"Token revocation response code: {revoke_response.status_code}", file=sys.stderr)
+        print(f"Token revocation response content: {revoke_response.text}", file=sys.stderr)
+        
+        # A successful revocation returns an empty response with a 200 status
+        if revoke_response.status_code == 200:
+            print("Successfully revoked TikTok access token", file=sys.stderr)
+            return True
+        else:
+            print(f"Failed to revoke token: {revoke_response.text}", file=sys.stderr)
+            return False
+            
+    except Exception as e:
+        print(f"Error revoking token: {str(e)}", file=sys.stderr)
         return False

@@ -11,4 +11,5 @@ urlpatterns = [
     path('login/tiktok/callback/', views.tiktok_callback, name='tiktok_callback'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('logout/', views.logout_view, name='logout'),
+    path('disconnect/', views.disconnect_tiktok, name='disconnect_tiktok'),
 ]

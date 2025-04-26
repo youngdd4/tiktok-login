@@ -37,8 +37,7 @@
             margin-bottom: 30px;
             color: #333;
         }
-        .logout-button {
-            background-color: #ff0050;
+        .button {
             color: white;
             border: none;
             padding: 10px 20px;
@@ -49,8 +48,21 @@
             margin-top: 20px;
             display: inline-block;
         }
+        .logout-button {
+            background-color: #ff0050;
+        }
         .logout-button:hover {
             background-color: #d90042;
+        }
+        .disconnect-button {
+            background-color: #333;
+            margin-right: 10px;
+        }
+        .disconnect-button:hover {
+            background-color: #555;
+        }
+        .button-container {
+            margin-top: 20px;
         }
         h1 {
             color: #333;
@@ -70,7 +82,10 @@
         {% endif %}
         <div class="username">{{ username }}</div>
         <p>You've successfully logged in with your TikTok account!</p>
-        <a href="{% url 'accounts:logout' %}" class="logout-button">Logout</a>
+        <div class="button-container">
+            <a href="{% url 'accounts:disconnect_tiktok' %}" class="button disconnect-button" onclick="return confirm('Are you sure you want to disconnect your TikTok account?')">Disconnect TikTok</a>
+            <a href="{% url 'accounts:logout' %}" class="button logout-button">Logout</a>
+        </div>
     </div>
 </body>
 </html>
