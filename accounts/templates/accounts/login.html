@@ -161,6 +161,17 @@
             background-repeat: no-repeat;
             background-position: center;
         }
+        .error-message {
+            background-color: #fff5f5;
+            border-left: 4px solid #FE2C55;
+            color: #d63031;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            text-align: left;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
     </style>
 </head>
 <body>
@@ -169,6 +180,12 @@
         
         <h1>Schedule Your TikToks. Grow Your Audience Effortlessly.</h1>
         <h2>Save time and stay consistent with our easy TikTok scheduling tool.</h2>
+        
+        {% if error %}
+        <div class="error-message">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
         
         <a href="{% url 'accounts:tiktok_login' %}" class="login-button">
             <span class="tiktok-icon"></span>

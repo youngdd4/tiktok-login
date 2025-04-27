@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Post Photos to TikTok{% endblock %}
+{% block title %}Photos{% endblock %}
 
 {% block extra_css %}
     <style>
@@ -138,7 +138,7 @@
 
 {% block content %}
     <div class="container">
-        <h1>Post Photos to TikTok</h1>
+        <h1>Photos</h1>
         
         {% if success %}
     <div class="alert alert-success">
@@ -189,19 +189,25 @@
             </div>
             
             <div class="form-group">
-            <label>Upload Photos</label>
-            <div class="file-upload" id="drop-area">
-                <div class="file-upload-icon">📁</div>
-                <div class="file-upload-text">Drag & drop photos here or click to browse</div>
-                <button type="button" class="upload-btn">Select Files</button>
-                <input type="file" id="file-input" name="photos" accept="image/jpeg,image/png,image/webp" multiple>
+                <label>Upload Photo</label>
+                <div class="file-upload" id="drop-area">
+                    <div class="file-upload-icon">📁</div>
+                    <div class="file-upload-text">Drag & drop a photo here or click to browse</div>
+                    <button type="button" class="upload-btn">Select File</button>
+                    <input type="file" id="file-input" name="photos" accept="image/jpeg,image/png,image/webp">
+                </div>
+                <small class="text-muted">Upload 1 photo (JPEG, PNG or WebP format, max 20MB)</small>
+                <div id="error-container"></div>
+                <div class="preview-container" id="preview-container"></div>
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
             </div>
-            <small class="text-muted">Upload up to 35 photos (JPEG, PNG or WebP format, max 20MB each)</small>
-            <div id="error-container"></div>
-            <div class="preview-container" id="preview-container"></div>
-            <div class="progress-container" id="progress-container">
-                <div class="progress-bar" id="progress-bar"></div>
-            </div>
+            
+            <div class="form-group">
+                <label>Or Enter Photo URL</label>
+                <input type="text" id="photo_url" name="photo_url" placeholder="https://example.com/my-image.jpg" class="form-control">
+                <small class="text-muted">Alternatively, enter a direct URL to your photo</small>
             </div>
             
             <div class="form-group">
@@ -246,15 +252,13 @@
         const progressBar = document.getElementById('progress-bar');
         const form = document.getElementById('photo-form');
         
-        // Maximum number of files
-        const MAX_FILES = 35;
         // Maximum file size in bytes (20MB)
         const MAX_FILE_SIZE = 20 * 1024 * 1024;
         // Allowed file types
         const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
         
-        // Uploaded files array
-        let uploadedFiles = [];
+        // Current uploaded file
+        let uploadedFile = null;
         
         // Handle click on the upload button
         dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
@@ -288,52 +292,51 @@
         dropArea.addEventListener('drop', function(e) {
             const dt = e.dataTransfer;
             const files = dt.files;
-            handleFiles(files);
+            if (files.length > 0) {
+                handleFile(files[0]); // Only use the first file
+            }
         });
         
         // Handle file input change
         fileInput.addEventListener('change', function() {
-            handleFiles(this.files);
+            if (this.files.length > 0) {
+                handleFile(this.files[0]); // Only use the first file
+            }
         });
         
-        // Handle files
-        function handleFiles(files) {
-            if (uploadedFiles.length + files.length > MAX_FILES) {
-                showError(`You can only upload up to ${MAX_FILES} photos`);
+        // Handle file
+        function handleFile(file) {
+            // Clear previous uploads and previews
+            clearFilePreview();
+            
+            // Validate file type
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                showError(`${file.name} is not a valid image type. Please upload JPEG, PNG, or WebP images.`);
                 return;
             }
             
-            Array.from(files).forEach(file => {
-                // Validate file type
-                if (!ALLOWED_TYPES.includes(file.type)) {
-                    showError(`${file.name} is not a valid image type. Please upload JPEG, PNG, or WebP images.`);
-                    return;
-                }
-                
-                // Validate file size
-                if (file.size > MAX_FILE_SIZE) {
-                    showError(`${file.name} exceeds the maximum file size of 20MB.`);
-                    return;
-                }
-                
-                // Add to uploaded files array
-                uploadedFiles.push(file);
-                
-                // Create preview
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = createPreviewItem(e.target.result, file.name, uploadedFiles.length - 1);
-                    previewContainer.appendChild(preview);
-                };
-                reader.readAsDataURL(file);
-            });
+            // Validate file size
+            if (file.size > MAX_FILE_SIZE) {
+                showError(`${file.name} exceeds the maximum file size of 20MB.`);
+                return;
+            }
+            
+            // Set the current file
+            uploadedFile = file;
+            
+            // Create preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = createPreviewItem(e.target.result, file.name);
+                previewContainer.appendChild(preview);
+            };
+            reader.readAsDataURL(file);
         }
         
         // Create preview item
-        function createPreviewItem(src, filename, index) {
+        function createPreviewItem(src, filename) {
             const div = document.createElement('div');
             div.className = 'preview-item';
-            div.dataset.index = index;
             
             const img = document.createElement('img');
             img.src = src;
@@ -344,25 +347,18 @@
             removeBtn.className = 'preview-remove';
             removeBtn.innerHTML = '×';
             removeBtn.addEventListener('click', function() {
-                removeFile(index);
-                div.remove();
+                clearFilePreview();
             });
             div.appendChild(removeBtn);
             
             return div;
         }
         
-        // Remove file from uploaded files array
-        function removeFile(index) {
-            uploadedFiles = uploadedFiles.filter((_, i) => i !== parseInt(index));
-            
-            // Update indices of remaining preview items
-            const previewItems = previewContainer.querySelectorAll('.preview-item');
-            previewItems.forEach((item, i) => {
-                if (parseInt(item.dataset.index) > index) {
-                    item.dataset.index = parseInt(item.dataset.index) - 1;
-                }
-            });
+        // Clear file preview and reset uploaded file
+        function clearFilePreview() {
+            previewContainer.innerHTML = '';
+            uploadedFile = null;
+            fileInput.value = '';
         }
         
         // Show error message
@@ -380,12 +376,11 @@
         
         // Handle form submission
         form.addEventListener('submit', function(e) {
-            // Always prevent default to simulate submission without actual processing
             e.preventDefault();
             
-            // Validate that we have at least one file
-            if (uploadedFiles.length === 0) {
-                showError('Please upload at least one photo');
+            // Validate that we have a file
+            if (!uploadedFile) {
+                showError('Please upload a photo');
                 return;
             }
             
@@ -403,7 +398,7 @@
                     // Show success message
                     const successMessage = document.createElement('div');
                     successMessage.className = 'alert alert-success';
-                    successMessage.innerHTML = 'Your photos have been uploaded! (This is just a UI demo, no actual upload occurred)';
+                    successMessage.innerHTML = 'Your photo has been uploaded! (This is just a UI demo, no actual upload occurred)';
                     form.parentNode.insertBefore(successMessage, form);
                     
                     // Hide form

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}TikTok Dashboard{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -147,7 +147,7 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="text-center">TikTok Dashboard</h1>
+    <h1 class="text-center">Home</h1>
     
     <div class="card mb-4">
         <div class="card-body text-center">
@@ -189,9 +189,9 @@
         <div class="col-md-6 mb-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Schedule Video <span class="feature-badge">New</span></h5>
+                    <h5 class="card-title">Video <span class="feature-badge">New</span></h5>
                     <p class="card-text">Plan and schedule your TikTok videos for optimal posting times.</p>
-                    <a href="{% url 'accounts:schedule_video' %}" class="btn btn-secondary">Schedule Video</a>
+                    <a href="{% url 'accounts:schedule_video' %}" class="btn btn-secondary">Video</a>
                 </div>
             </div>
         </div>
@@ -199,9 +199,9 @@
         <div class="col-md-6 mb-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Post Photos <span class="feature-badge">New</span></h5>
+                    <h5 class="card-title">Photos <span class="feature-badge">New</span></h5>
                     <p class="card-text">Upload and post photos directly to your TikTok account.</p>
-                    <a href="{% url 'accounts:post_photo' %}" class="btn btn-primary">Post Photos</a>
+                    <a href="{% url 'accounts:post_photo' %}" class="btn btn-primary">Photos</a>
                 </div>
             </div>
         </div>
@@ -219,9 +219,9 @@
         <div class="col-md-6 mb-4">
             <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Scheduled Posts</h5>
+                    <h5 class="card-title">Posts</h5>
                     <p class="card-text">Manage your upcoming scheduled posts.</p>
-                    <a href="{% url 'accounts:scheduled_posts' %}" class="btn btn-outline-secondary">View Scheduled</a>
+                    <a href="{% url 'accounts:scheduled_posts' %}" class="btn btn-outline-secondary">View Posts</a>
                 </div>
             </div>
         </div>

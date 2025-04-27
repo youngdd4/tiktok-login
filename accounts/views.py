@@ -132,8 +132,8 @@ def tiktok_callback(request):
         
         # Exit early if there was an error or no code
         if error or not code:
-            error_msg = error_description or "Authorization failed"
-            return HttpResponse(f'TikTok login failed: {error_msg}', status=400)
+            error_msg = error_description or "Authorization failed or was cancelled by the user"
+            return render(request, 'accounts/login.html', {'error': error_msg})
         
         # Clean redirect_uri as we did in the original request
         parsed_uri = urllib.parse.urlparse(redirect_uri)
@@ -306,15 +306,15 @@ def tiktok_callback(request):
                     print(f"Login successful, redirecting to dashboard", file=sys.stderr)
                     return redirect('accounts:dashboard')
                 else:
-                    return HttpResponse('Failed to retrieve user information from TikTok', status=500)
+                    return render(request, 'accounts/login.html', {'error': 'Failed to retrieve user information from TikTok'})
             else:
-                return HttpResponse('TikTok login failed: Missing access token or open_id in response', status=500)
+                return render(request, 'accounts/login.html', {'error': 'TikTok login failed: Missing access token or open_id in response'})
         else:
-            return HttpResponse(f'TikTok token exchange failed: {response.text}', status=500)
+            return render(request, 'accounts/login.html', {'error': f'TikTok authentication failed: {response.text}'})
     
     except Exception as e:
         print(f"Error in tiktok_callback: {str(e)}", file=sys.stderr)
-        return HttpResponse(f'TikTok login failed: {str(e)}', status=500)
+        return render(request, 'accounts/login.html', {'error': f'TikTok login failed: {str(e)}'})
 
 @tiktok_login_required
 def dashboard(request):
@@ -497,59 +497,55 @@ def post_photo_view(request):
             auto_add_music = request.POST.get('auto_add_music', '') == 'on'
             
             # Check for uploaded files first
-            uploaded_files = request.FILES.getlist('photos')
+            uploaded_file = None
             photo_urls = []
             
-            if uploaded_files:
-                # Process uploaded files
-                for uploaded_file in uploaded_files:
-                    # Validate file type
-                    if not uploaded_file.content_type in ['image/jpeg', 'image/png', 'image/webp']:
-                        context['error'] = f'Invalid file type: {uploaded_file.name}. Only JPEG, PNG, and WebP formats are supported.'
-                        return render(request, 'accounts/post_photo.html', context)
-                    
-                    # Validate file size (20MB max)
-                    if uploaded_file.size > 20 * 1024 * 1024:
-                        context['error'] = f'File too large: {uploaded_file.name}. Maximum size is 20MB.'
-                        return render(request, 'accounts/post_photo.html', context)
+            if 'photos' in request.FILES:
+                # Get the uploaded file (only one allowed)
+                uploaded_file = request.FILES['photos']
                 
-                # If validation passes, save files and get URLs
-                for uploaded_file in uploaded_files:
-                    # Save file to a temporary location with a unique name
-                    file_name = f"{uuid.uuid4()}_{secure_filename(uploaded_file.name)}"
-                    file_path = os.path.join(settings.MEDIA_ROOT, 'temp_uploads', file_name)
-                    
-                    # Ensure directory exists
-                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    
-                    # Save the file
-                    with open(file_path, 'wb+') as destination:
-                        for chunk in uploaded_file.chunks():
-                            destination.write(chunk)
-                    
-                    # Get full URL to the file
-                    file_url = request.build_absolute_uri(settings.MEDIA_URL + 'temp_uploads/' + file_name)
-                    photo_urls.append(file_url)
+                # Validate file type
+                if not uploaded_file.content_type in ['image/jpeg', 'image/png', 'image/webp']:
+                    context['error'] = f'Invalid file type: {uploaded_file.name}. Only JPEG, PNG, and WebP formats are supported.'
+                    return render(request, 'accounts/post_photo.html', context)
+                
+                # Validate file size (20MB max)
+                if uploaded_file.size > 20 * 1024 * 1024:
+                    context['error'] = f'File too large: {uploaded_file.name}. Maximum size is 20MB.'
+                    return render(request, 'accounts/post_photo.html', context)
+                
+                # If validation passes, save file and get URL
+                # Save file to a temporary location with a unique name
+                file_name = f"{uuid.uuid4()}_{secure_filename(uploaded_file.name)}"
+                file_path = os.path.join(settings.MEDIA_ROOT, 'temp_uploads', file_name)
+                
+                # Ensure directory exists
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                
+                # Save the file
+                with open(file_path, 'wb+') as destination:
+                    for chunk in uploaded_file.chunks():
+                        destination.write(chunk)
+                
+                # Get full URL to the file
+                file_url = request.build_absolute_uri(settings.MEDIA_URL + 'temp_uploads/' + file_name)
+                photo_urls.append(file_url)
             else:
                 # Fall back to URL-based uploads
-                photo_urls = request.POST.get('photo_urls', '').split('\n')
-                photo_urls = [url.strip() for url in photo_urls if url.strip()]
+                photo_url = request.POST.get('photo_url', '').strip()
+                if photo_url:
+                    photo_urls.append(photo_url)
             
             # Basic validation
             if not photo_urls:
-                context['error'] = 'Please provide at least one photo by uploading or entering URLs'
+                context['error'] = 'Please provide a photo by uploading or entering a URL'
                 return render(request, 'accounts/post_photo.html', context)
                 
             if not title:
                 context['error'] = 'Please provide a title for your post'
                 return render(request, 'accounts/post_photo.html', context)
             
-            # Limit to 35 photos as per TikTok requirements
-            if len(photo_urls) > 35:
-                context['error'] = 'You can upload a maximum of 35 photos'
-                return render(request, 'accounts/post_photo.html', context)
-            
-            # Attempt to post photos
+            # Attempt to post photo
             try:
                 result = post_photos_to_tiktok(
                     request.session.get('tiktok_access_token'),
@@ -562,7 +558,7 @@ def post_photo_view(request):
                 )
                 
                 if result.get('success'):
-                    context['success'] = 'Your photos have been posted to TikTok!'
+                    context['success'] = 'Your photo has been posted to TikTok!'
                     context['publish_id'] = result.get('publish_id')
                     
                     # Save as scheduled post (but mark as published)
@@ -574,7 +570,7 @@ def post_photo_view(request):
                                 title=title,
                                 description=description,
                                 media_type='photo',
-                                media_url=','.join(photo_urls),
+                                media_url=photo_urls[0],
                                 privacy_level=privacy_level,
                                 disable_comment=disable_comment,
                                 auto_add_music=auto_add_music,
@@ -590,11 +586,11 @@ def post_photo_view(request):
                     context['error'] = result.get('error', 'An unknown error occurred')
             
             except Exception as e:
-                print(f"Error posting photos: {str(e)}", file=sys.stderr)
+                print(f"Error posting photo: {str(e)}", file=sys.stderr)
                 context['error'] = f"Error: {str(e)}"
                 
             # Clean up temporary files after a delay (via background task)
-            if uploaded_files:
+            if uploaded_file:
                 cleanup_temp_files.apply_async(args=[photo_urls], countdown=3600)  # Clean up after 1 hour
         
         # Query creator info to get available privacy levels
