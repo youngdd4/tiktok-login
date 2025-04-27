@@ -35,6 +35,7 @@ class ScheduledPost(models.Model):
     media_type = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default='video')
     media_url = models.URLField(max_length=500)  # For remote videos
     media_file = models.FileField(upload_to='tiktok_uploads/', blank=True, null=True)  # For local uploads
+    cloudinary_public_id = models.CharField(max_length=500, blank=True)  # Store Cloudinary public_id
     thumbnail_url = models.URLField(max_length=500, blank=True)
     privacy_level = models.CharField(max_length=50, default='PUBLIC_TO_EVERYONE')
     disable_comment = models.BooleanField(default=False)
@@ -79,6 +80,21 @@ class ScheduledPost(models.Model):
     @property
     def is_past_due(self):
         return self.scheduled_time <= timezone.now() and self.status == 'scheduled'
+    
+    def delete_cloudinary_media(self):
+        """Delete media from Cloudinary if public_id exists"""
+        from .cloudinary_utils import delete_media, extract_public_id_from_url
+        
+        if self.cloudinary_public_id:
+            # If we have stored the public_id directly
+            delete_media(self.cloudinary_public_id)
+            self.cloudinary_public_id = ''
+            self.save(update_fields=['cloudinary_public_id'])
+        elif self.media_url and 'res.cloudinary.com' in self.media_url:
+            # Try to extract public_id from URL if we don't have it stored
+            public_id = extract_public_id_from_url(self.media_url)
+            if public_id:
+                delete_media(public_id)
 
 class PostAnalytics(models.Model):
     post = models.OneToOneField(ScheduledPost, on_delete=models.CASCADE, related_name='analytics')

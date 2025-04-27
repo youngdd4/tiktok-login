@@ -23,8 +23,8 @@ from django.utils.text import slugify
 from django.core.files.uploadedfile import UploadedFile
 from celery import shared_task
 from functools import wraps
-
 from .models import ScheduledPost, PostAnalytics, Notification, TikTokProfile
+from .cloudinary_utils import upload_media, delete_media, extract_public_id_from_url
 
 # TikTok authentication decorator
 def tiktok_login_required(view_func):
@@ -480,11 +480,13 @@ def revoke_token(access_token):
 
 @tiktok_login_required
 def post_photo_view(request):
-    """Display photo posting form and handle submissions"""
+    """
+    View for posting a photo directly to TikTok
+    """
     try:
         context = {
-            'username': request.session.get('tiktok_username', 'TikTok User'),
-            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'section': 'post-photo',
+            'title': 'Post Photo to TikTok'
         }
         
         # Handle form submission
@@ -499,6 +501,7 @@ def post_photo_view(request):
             # Check for uploaded files first
             uploaded_file = None
             photo_urls = []
+            cloudinary_public_id = ""
             
             if 'photos' in request.FILES:
                 # Get the uploaded file (only one allowed)
@@ -514,22 +517,15 @@ def post_photo_view(request):
                     context['error'] = f'File too large: {uploaded_file.name}. Maximum size is 20MB.'
                     return render(request, 'accounts/post_photo.html', context)
                 
-                # If validation passes, save file and get URL
-                # Save file to a temporary location with a unique name
-                file_name = f"{uuid.uuid4()}_{secure_filename(uploaded_file.name)}"
-                file_path = os.path.join(settings.MEDIA_ROOT, 'temp_uploads', file_name)
-                
-                # Ensure directory exists
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                
-                # Save the file
-                with open(file_path, 'wb+') as destination:
-                    for chunk in uploaded_file.chunks():
-                        destination.write(chunk)
-                
-                # Get full URL to the file
-                file_url = request.build_absolute_uri(settings.MEDIA_URL + 'temp_uploads/' + file_name)
-                photo_urls.append(file_url)
+                # Upload to Cloudinary
+                try:
+                    upload_result = upload_media(uploaded_file, resource_type="image")
+                    file_url = upload_result.get('secure_url')
+                    cloudinary_public_id = upload_result.get('public_id')
+                    photo_urls.append(file_url)
+                except Exception as e:
+                    context['error'] = f'Error uploading to cloud storage: {str(e)}'
+                    return render(request, 'accounts/post_photo.html', context)
             else:
                 # Fall back to URL-based uploads
                 photo_url = request.POST.get('photo_url', '').strip()
@@ -548,7 +544,7 @@ def post_photo_view(request):
             # Attempt to post photo
             try:
                 result = post_photos_to_tiktok(
-                    request.session.get('tiktok_access_token'),
+                    request.session.get('user_id'),
                     title,
                     description,
                     photo_urls,
@@ -571,6 +567,7 @@ def post_photo_view(request):
                                 description=description,
                                 media_type='photo',
                                 media_url=photo_urls[0],
+                                cloudinary_public_id=cloudinary_public_id,
                                 privacy_level=privacy_level,
                                 disable_comment=disable_comment,
                                 auto_add_music=auto_add_music,
@@ -579,19 +576,27 @@ def post_photo_view(request):
                                 publish_id=result.get('publish_id')
                             )
                             post.save()
+                            
+                            # Since the post was published successfully, we can delete the media from Cloudinary
+                            if cloudinary_public_id:
+                                delete_media(cloudinary_public_id)
+                                
                         except Exception as e:
                             print(f"Error saving post record: {str(e)}", file=sys.stderr)
                             # Continue without saving record
                 else:
                     context['error'] = result.get('error', 'An unknown error occurred')
+                    # If posting failed, delete the media from Cloudinary
+                    if cloudinary_public_id:
+                        delete_media(cloudinary_public_id)
             
             except Exception as e:
                 print(f"Error posting photo: {str(e)}", file=sys.stderr)
                 context['error'] = f"Error: {str(e)}"
                 
-            # Clean up temporary files after a delay (via background task)
-            if uploaded_file:
-                cleanup_temp_files.apply_async(args=[photo_urls], countdown=3600)  # Clean up after 1 hour
+                # If posting failed, delete the media from Cloudinary
+                if cloudinary_public_id:
+                    delete_media(cloudinary_public_id)
         
         # Query creator info to get available privacy levels
         access_token = request.session.get('tiktok_access_token')
@@ -665,37 +670,41 @@ def get_creator_privacy_levels(access_token):
         print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
         return []
 
-def post_photos_to_tiktok(access_token, title, description, photo_urls, privacy_level, disable_comment, auto_add_music):
+def post_photos_to_tiktok(user_id, title, description, photo_urls, privacy_level, disable_comment, auto_add_music):
     """Post photos to TikTok using the Content Posting API"""
-    if not access_token:
-        return {'success': False, 'error': 'No access token available'}
-    
-    # Prepare API request
-    content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    }
-    
-    # Create request payload
-    payload = {
-        'post_info': {
-            'title': title,
-            'description': description,
-            'disable_comment': disable_comment,
-            'privacy_level': privacy_level,
-            'auto_add_music': auto_add_music
-        },
-        'source_info': {
-            'source': 'PULL_FROM_URL',
-            'photo_cover_index': 0,  # Use first image as cover
-            'photo_images': photo_urls
-        },
-        'post_mode': 'DIRECT_POST',
-        'media_type': 'PHOTO'
-    }
-    
     try:
+        # Get user's access token
+        profile = TikTokProfile.objects.get(user_id=user_id)
+        access_token = profile.access_token
+        
+        if not access_token:
+            return {'success': False, 'error': 'No access token available'}
+        
+        # Prepare API request
+        content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Create request payload
+        payload = {
+            'post_info': {
+                'title': title,
+                'description': description,
+                'disable_comment': disable_comment,
+                'privacy_level': privacy_level,
+                'auto_add_music': auto_add_music
+            },
+            'source_info': {
+                'source': 'PULL_FROM_URL',
+                'photo_cover_index': 0,  # Use first image as cover
+                'photo_images': photo_urls
+            },
+            'post_mode': 'DIRECT_POST',
+            'media_type': 'PHOTO'
+        }
+        
         print("Posting photos to TikTok with payload:", file=sys.stderr)
         print(json.dumps(payload, indent=2), file=sys.stderr)
         
@@ -715,6 +724,8 @@ def post_photos_to_tiktok(access_token, title, description, photo_urls, privacy_
         
         return {'success': False, 'error': f"API error: {response.status_code} - {response.text}"}
     
+    except TikTokProfile.DoesNotExist:
+        return {'success': False, 'error': 'TikTok profile not found for this user'}
     except Exception as e:
         print(f"Error in post_photos_to_tiktok: {str(e)}", file=sys.stderr)
         return {'success': False, 'error': str(e)}
@@ -765,8 +776,8 @@ def schedule_video_view(request):
     """Display video scheduling form and handle submissions"""
     try:
         context = {
-            'username': request.session.get('tiktok_username', 'TikTok User'),
-            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'section': 'schedule-video',
+            'title': 'Schedule Video for TikTok'
         }
         
         # Query creator info to get available privacy levels
@@ -801,9 +812,36 @@ def schedule_video_view(request):
             disable_stitch = request.POST.get('disable_stitch', '') == 'on'
             hashtags = request.POST.get('hashtags', '')
             
+            # Handle file upload to Cloudinary
+            uploaded_file = None
+            cloudinary_public_id = ""
+            
+            if 'video_file' in request.FILES:
+                uploaded_file = request.FILES['video_file']
+                
+                # Validate file type
+                valid_video_types = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-ms-wmv']
+                if not uploaded_file.content_type in valid_video_types:
+                    context['error'] = f'Invalid file type: {uploaded_file.name}. Only MP4, MOV, AVI, and WMV formats are supported.'
+                    return render(request, 'accounts/schedule_video.html', context)
+                
+                # Validate file size (100MB max)
+                if uploaded_file.size > 100 * 1024 * 1024:
+                    context['error'] = f'File too large: {uploaded_file.name}. Maximum size is 100MB.'
+                    return render(request, 'accounts/schedule_video.html', context)
+                
+                # Upload to Cloudinary
+                try:
+                    upload_result = upload_media(uploaded_file, resource_type="video")
+                    video_url = upload_result.get('secure_url')
+                    cloudinary_public_id = upload_result.get('public_id')
+                except Exception as e:
+                    context['error'] = f'Error uploading to cloud storage: {str(e)}'
+                    return render(request, 'accounts/schedule_video.html', context)
+            
             # Basic validation
             if not video_url:
-                context['error'] = 'Please provide a video URL'
+                context['error'] = 'Please provide a video URL or upload a video file'
                 return render(request, 'accounts/schedule_video.html', context)
                 
             if not title:
@@ -840,6 +878,7 @@ def schedule_video_view(request):
                     description=description,
                     media_type='video',
                     media_url=video_url,
+                    cloudinary_public_id=cloudinary_public_id,
                     privacy_level=privacy_level,
                     disable_comment=disable_comment,
                     disable_duet=disable_duet,
@@ -862,6 +901,13 @@ def schedule_video_view(request):
             except Exception as e:
                 print(f"Error scheduling video: {str(e)}", file=sys.stderr)
                 context['error'] = f"Error: {str(e)}"
+                
+                # If there was an error and we uploaded to Cloudinary, delete the file
+                if cloudinary_public_id:
+                    try:
+                        delete_media(cloudinary_public_id)
+                    except Exception as del_error:
+                        print(f"Error deleting failed upload from Cloudinary: {str(del_error)}", file=sys.stderr)
         
         return render(request, 'accounts/schedule_video.html', context)
     
@@ -1036,12 +1082,27 @@ def delete_scheduled_post(request, post_id):
         
         if request.method == 'POST':
             post_title = post.title
+            
+            # Delete Cloudinary media if it exists
+            cloudinary_deleted = False
+            if post.cloudinary_public_id:
+                try:
+                    delete_media(post.cloudinary_public_id)
+                    cloudinary_deleted = True
+                except Exception as e:
+                    print(f"Error deleting Cloudinary media for post {post.id}: {str(e)}", file=sys.stderr)
+            
+            # Delete post from database
             post.delete()
             
             # Create a notification
+            msg = f"Video '{post_title}' has been deleted"
+            if cloudinary_deleted:
+                msg += " along with its associated media"
+                
             Notification.objects.create(
                 user_id=user_id,
-                message=f"Video '{post_title}' has been deleted",
+                message=msg,
                 type='info'
             )
             
@@ -1160,6 +1221,42 @@ def process_scheduled_posts():
                     type='info',
                     post=post
                 )
+                
+                # Wait a short while to check if the post is published
+                for i in range(3):  # Try up to 3 times
+                    time.sleep(5)  # Wait 5 seconds between checks
+                    status_result = check_post_status_internal(post.user_id, post.publish_id)
+                    if status_result.get('status') == 'PUBLISH_DONE':
+                        post.status = 'published'
+                        
+                        # Delete Cloudinary media now that it's successfully published
+                        if post.cloudinary_public_id:
+                            try:
+                                delete_media(post.cloudinary_public_id)
+                                post.cloudinary_public_id = ''  # Clear the public_id after deletion
+                            except Exception as cloud_error:
+                                print(f"Error deleting Cloudinary media for post {post.id}: {str(cloud_error)}", file=sys.stderr)
+                        
+                        # Update notification
+                        Notification.objects.create(
+                            user_id=post.user_id,
+                            message=f"Your {post.media_type} '{post.title}' has been published to TikTok",
+                            type='success',
+                            post=post
+                        )
+                        break
+                    elif status_result.get('status') == 'PUBLISH_FAILED':
+                        post.status = 'failed'
+                        post.error_message = status_result.get('error_message', 'Unknown error from TikTok')
+                        
+                        # Create failure notification
+                        Notification.objects.create(
+                            user_id=post.user_id,
+                            message=f"Failed to publish {post.media_type} '{post.title}': {post.error_message}",
+                            type='error',
+                            post=post
+                        )
+                        break
             else:
                 post.status = 'failed'
                 post.error_message = result.get('error', 'Unknown error')
@@ -1171,6 +1268,8 @@ def process_scheduled_posts():
                     type='error',
                     post=post
                 )
+                
+                # We don't delete media on failure so user can try again
             
             post.save()
             
@@ -1187,35 +1286,85 @@ def process_scheduled_posts():
                 type='error',
                 post=post
             )
+            
+            # We don't delete media on exception so user can try again
 
-def post_video_to_tiktok(access_token, title, video_url, privacy_level, disable_comment, disable_duet, disable_stitch):
-    """Post a video to TikTok using the Direct Post API"""
-    if not access_token:
-        return {'success': False, 'error': 'No access token available'}
-    
-    # Prepare API request
-    video_init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json; charset=UTF-8'
-    }
-    
-    # Create request payload
-    payload = {
-        'post_info': {
-            'title': title,
-            'privacy_level': privacy_level,
-            'disable_duet': disable_duet,
-            'disable_comment': disable_comment,
-            'disable_stitch': disable_stitch
-        },
-        'source_info': {
-            'source': 'PULL_FROM_URL',
-            'video_url': video_url
-        }
-    }
-    
+def check_post_status_internal(user_id, publish_id):
+    """Internal utility to check post status"""
     try:
+        # Get user's access token
+        profile = TikTokProfile.objects.get(user_id=user_id)
+        access_token = profile.access_token
+        
+        status_url = "https://open.tiktokapis.com/v2/post/publish/status/fetch/"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json; charset=UTF-8'
+        }
+        
+        payload = {
+            'publish_id': publish_id
+        }
+        
+        response = requests.post(status_url, headers=headers, json=payload)
+        print(f"Status check response: {response.status_code}", file=sys.stderr)
+        print(f"Status check content: {response.text}", file=sys.stderr)
+        
+        if response.status_code == 200:
+            data = response.json()
+            status = data.get('data', {}).get('status')
+            return {
+                'success': True,
+                'status': status,
+                'error_message': data.get('error', {}).get('message', '')
+            }
+        
+        return {
+            'success': False,
+            'status': 'UNKNOWN',
+            'error_message': f"Status check failed: {response.status_code}"
+        }
+    
+    except Exception as e:
+        print(f"Error in check_post_status_internal: {str(e)}", file=sys.stderr)
+        return {
+            'success': False,
+            'status': 'ERROR',
+            'error_message': str(e)
+        }
+
+def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comment, disable_duet, disable_stitch):
+    """Post a video to TikTok using the Direct Post API"""
+    try:
+        # Get user's access token
+        profile = TikTokProfile.objects.get(user_id=user_id)
+        access_token = profile.access_token
+        
+        if not access_token:
+            return {'success': False, 'error': 'No access token available'}
+        
+        # Prepare API request
+        video_init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json; charset=UTF-8'
+        }
+        
+        # Create request payload
+        payload = {
+            'post_info': {
+                'title': title,
+                'privacy_level': privacy_level,
+                'disable_duet': disable_duet,
+                'disable_comment': disable_comment,
+                'disable_stitch': disable_stitch
+            },
+            'source_info': {
+                'source': 'PULL_FROM_URL',
+                'video_url': video_url
+            }
+        }
+        
         print("Posting video to TikTok with payload:", file=sys.stderr)
         print(json.dumps(payload, indent=2), file=sys.stderr)
         
@@ -1235,6 +1384,8 @@ def post_video_to_tiktok(access_token, title, video_url, privacy_level, disable_
         
         return {'success': False, 'error': f"API error: {response.status_code} - {response.text}"}
     
+    except TikTokProfile.DoesNotExist:
+        return {'success': False, 'error': 'TikTok profile not found for this user'}
     except Exception as e:
         print(f"Error in post_video_to_tiktok: {str(e)}", file=sys.stderr)
         return {'success': False, 'error': str(e)}

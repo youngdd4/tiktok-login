@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Video{% endblock %}
+{% block title %}Videos{% endblock %}
 
 {% block extra_css %}
     <style>
@@ -166,7 +166,7 @@
 
 {% block content %}
     <div class="container">
-        <h1>Video</h1>
+        <h1>Videos</h1>
         
         {% if success %}
     <div class="alert alert-success">
@@ -201,39 +201,44 @@
             {% csrf_token %}
             
             <div class="form-group">
-                <label for="title">Title (Required)</label>
-            <input type="text" id="title" name="title" required maxlength="2200" placeholder="Add a title for your post (max 2200 characters)" class="form-control">
-            <small class="text-muted">This will be displayed as the caption of your TikTok post. You can use #hashtags and @mentions.</small>
+                <label for="title">Video Title (Required)</label>
+                <input type="text" id="title" name="title" required maxlength="100" placeholder="Add a title for your video (max 100 characters)" class="form-control">
+                <small class="text-muted">This will be displayed as the title of your TikTok video</small>
             </div>
             
             <div class="form-group">
                 <label for="description">Description</label>
-            <textarea id="description" name="description" placeholder="Add additional description for your post (optional)" class="form-control"></textarea>
+                <textarea id="description" name="description" maxlength="2200" placeholder="Add a description for your video (max 2200 characters). You can use #hashtags and @mentions." class="form-control"></textarea>
             </div>
             
             <div class="form-group">
-            <label>Upload Video</label>
-            <div class="file-upload" id="drop-area">
-                <div class="file-upload-icon">🎬</div>
-                <div class="file-upload-text">Drag & drop video here or click to browse</div>
-                <button type="button" class="upload-btn">Select Video File</button>
-                <input type="file" id="file-input" name="video" accept="video/mp4,video/webm,video/quicktime" single>
+                <label>Upload Video</label>
+                <div class="file-upload" id="drop-area">
+                    <div class="file-upload-icon">📹</div>
+                    <div class="file-upload-text">Drag & drop a video here or click to browse</div>
+                    <button type="button" class="upload-btn">Select Video File</button>
+                    <input type="file" id="file-input" name="video_file" accept="video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv">
+                </div>
+                <small class="text-muted">Upload a video file (MP4, MOV, AVI, or WMV format, max 100MB)</small>
+                <div id="preview-container" class="preview-container"></div>
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div id="error-container"></div>
             </div>
-            <small class="text-muted">Upload a video (MP4, WebM or MOV format, max 4GB)</small>
-            <div id="error-container"></div>
-            <div class="preview-container" id="preview-container"></div>
-            <div class="video-details" id="video-details"></div>
-            <div class="progress-container" id="progress-container">
-                <div class="progress-bar" id="progress-bar"></div>
-            </div>
+            
+            <div class="form-group">
+                <label for="video_url">OR Video URL</label>
+                <input type="url" id="video_url" name="video_url" placeholder="Enter a direct URL to your video file (e.g. https://example.com/video.mp4)" class="form-control">
+                <small class="text-muted">Enter a direct link to an MP4 video file if you don't want to upload it directly</small>
             </div>
             
             <div class="form-group">
                 <label for="hashtags">Hashtags</label>
-            <input type="text" id="hashtag_input" placeholder="Enter a hashtag (without #) and press Enter" class="form-control">
-                <div class="hashtag-container" id="hashtag-container"></div>
+                <input type="text" id="hashtag-input" placeholder="Add hashtags (without # symbol)" class="form-control">
+                <button type="button" id="add-hashtag" class="add-hashtag-btn">Add Hashtag</button>
+                <div id="hashtag-container" class="hashtag-container"></div>
                 <input type="hidden" id="hashtags" name="hashtags" value="">
-            <small class="text-muted">Add hashtags to increase your video's visibility</small>
             </div>
             
             <div class="form-group">
@@ -280,271 +285,234 @@
     
 {% block extra_js %}
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Handle hashtags
-        const hashtagInput = document.getElementById('hashtag_input');
-        const hashtagContainer = document.getElementById('hashtag-container');
-        const hashtagsHiddenInput = document.getElementById('hashtags');
-        const hashtags = [];
-
-        // Add hashtag when Enter is pressed
-        hashtagInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const hashtag = hashtagInput.value.trim();
-                if (hashtag && !hashtags.includes(hashtag)) {
-                    addHashtag(hashtag);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle hashtags
+            const hashtagInput = document.getElementById('hashtag-input');
+            const hashtagContainer = document.getElementById('hashtag-container');
+            const hashtagsHiddenInput = document.getElementById('hashtags');
+            const addHashtagBtn = document.getElementById('add-hashtag');
+            let hashtags = [];
+            
+            // Add hashtag when Enter is pressed
+            addHashtagBtn.addEventListener('click', function() {
+                addHashtag();
+            });
+            
+            hashtagInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addHashtag();
+                }
+            });
+            
+            function addHashtag() {
+                const value = hashtagInput.value.trim();
+                if (!value) return;
+                
+                // Remove any # symbols and special characters
+                const cleanValue = value.replace(/[^a-zA-Z0-9_]/g, '');
+                
+                if (cleanValue && !hashtags.includes(cleanValue)) {
+                    hashtags.push(cleanValue);
+                    renderHashtags();
                     hashtagInput.value = '';
                 }
             }
-        });
-
-        function addHashtag(hashtag) {
-            hashtags.push(hashtag);
             
-            const hashtagElement = document.createElement('div');
-            hashtagElement.className = 'hashtag';
+            function renderHashtags() {
+                hashtagContainer.innerHTML = '';
+                hashtags.forEach((tag, index) => {
+                    const hashtagElement = document.createElement('div');
+                    hashtagElement.className = 'hashtag';
+                    hashtagElement.innerHTML = `
+                        <span>#${tag}</span>
+                        <button type="button" class="remove-hashtag" data-index="${index}">&times;</button>
+                    `;
+                    hashtagContainer.appendChild(hashtagElement);
+                });
+                
+                // Update hidden input value
+                hashtagsHiddenInput.value = hashtags.join(',');
+                
+                // Add event listeners to remove buttons
+                document.querySelectorAll('.remove-hashtag').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const index = parseInt(this.getAttribute('data-index'));
+                        hashtags.splice(index, 1);
+                        renderHashtags();
+                    });
+                });
+            }
             
-            const hashtagText = document.createElement('span');
-            hashtagText.textContent = `#${hashtag}`;
-            hashtagElement.appendChild(hashtagText);
+            // Handle file upload
+            const fileInput = document.getElementById('file-input');
+            const dropArea = document.getElementById('drop-area');
+            const uploadBtn = dropArea.querySelector('.upload-btn');
+            const previewContainer = document.getElementById('preview-container');
+            const errorContainer = document.getElementById('error-container');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            let uploadedVideo = null;
             
-            const removeButton = document.createElement('button');
-            removeButton.className = 'remove-hashtag';
-            removeButton.innerHTML = '×';
-            removeButton.addEventListener('click', function() {
-                const index = hashtags.indexOf(hashtag);
-                if (index !== -1) {
-                    hashtags.splice(index, 1);
-                hashtagElement.remove();
-                    updateHashtagsInput();
+            uploadBtn.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    handleVideoFile(this.files[0]);
                 }
             });
             
-            hashtagElement.appendChild(removeButton);
-            hashtagContainer.appendChild(hashtagElement);
+            // Drag and drop functionality
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
             
-            updateHashtagsInput();
-        }
-        
-        function updateHashtagsInput() {
-            hashtagsHiddenInput.value = hashtags.join(',');
-        }
-        
-        // Video upload functionality
-        const dropArea = document.getElementById('drop-area');
-        const fileInput = document.getElementById('file-input');
-        const previewContainer = document.getElementById('preview-container');
-        const videoDetails = document.getElementById('video-details');
-        const errorContainer = document.getElementById('error-container');
-        const progressContainer = document.getElementById('progress-container');
-        const progressBar = document.getElementById('progress-bar');
-        const form = document.getElementById('video-form');
-        
-        // Maximum file size in bytes (4GB)
-        const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024;
-        // Allowed file types
-        const ALLOWED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
-        
-        // Currently uploaded video
-        let uploadedVideo = null;
-        
-        // Handle click on the upload button
-        dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            fileInput.click();
-        });
-        
-        // Handle drag and drop events
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
-        });
-        
-        function preventDefaults(e) {
+            function preventDefaults(e) {
                 e.preventDefault();
-            e.stopPropagation();
-        }
-        
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, function() {
-                dropArea.classList.add('drag-over');
-            }, false);
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, function() {
-                dropArea.classList.remove('drag-over');
-            }, false);
-        });
-        
-        // Handle dropped files
-        dropArea.addEventListener('drop', function(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length > 0) {
-                handleVideoFile(files[0]);
-            }
-        });
-        
-        // Handle file input change
-        fileInput.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                handleVideoFile(this.files[0]);
-            }
-        });
-        
-        // Handle video file
-        function handleVideoFile(file) {
-            // Clear any previous uploads
-            clearVideoPreview();
-            
-            // Validate file type
-            if (!ALLOWED_TYPES.includes(file.type)) {
-                showError(`${file.name} is not a valid video type. Please upload MP4, WebM, or MOV files.`);
-                return;
+                e.stopPropagation();
             }
             
-            // Validate file size
-            if (file.size > MAX_FILE_SIZE) {
-                showError(`${file.name} exceeds the maximum file size of 4GB.`);
-                return;
-            }
-            
-            // Store the uploaded file
-            uploadedVideo = file;
-            
-            // Create preview
-            createVideoPreview(file);
-        }
-        
-        // Create video preview
-        function createVideoPreview(file) {
-            const preview = document.createElement('div');
-            preview.className = 'preview-item';
-            
-            // Create video element
-            const video = document.createElement('video');
-            video.controls = true;
-            
-            // Create source
-            const source = document.createElement('source');
-            source.src = URL.createObjectURL(file);
-            source.type = file.type;
-            
-            video.appendChild(source);
-            preview.appendChild(video);
-            
-            // Add remove button
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'preview-remove';
-            removeBtn.innerHTML = '×';
-            removeBtn.addEventListener('click', function() {
-                clearVideoPreview();
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.add('drag-over');
+                }, false);
             });
-            preview.appendChild(removeBtn);
             
-            previewContainer.appendChild(preview);
-            
-            // Display video details
-            video.onloadedmetadata = function() {
-                const duration = Math.round(video.duration);
-                const minutes = Math.floor(duration / 60);
-                const seconds = duration % 60;
-                const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
-                const size = formatFileSize(file.size);
-                
-                videoDetails.innerHTML = `
-                    <strong>File:</strong> ${file.name}<br>
-                    <strong>Type:</strong> ${file.type}<br>
-                    <strong>Size:</strong> ${size}<br>
-                    <strong>Duration:</strong> ${formattedDuration}
-                `;
-                
-                // Check if video is too long
-                const maxDuration = {{ max_video_duration|default:180 }};
-                if (duration > maxDuration) {
-                    showError(`Video duration (${formattedDuration}) exceeds the maximum allowed duration of ${maxDuration} seconds.`);
-                }
-            };
-        }
-        
-        // Clear video preview
-        function clearVideoPreview() {
-            uploadedVideo = null;
-            previewContainer.innerHTML = '';
-            videoDetails.innerHTML = '';
-            
-            // Clear validation errors related to video
-            const videoErrors = document.querySelectorAll('.error-item');
-            videoErrors.forEach(error => {
-                if (error.textContent.includes('video') || error.textContent.includes('Video')) {
-                    error.remove();
-                }
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.remove('drag-over');
+                }, false);
             });
-        }
-        
-        // Format file size
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' bytes';
-            else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
-            else if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
-            else return (bytes / 1073741824).toFixed(2) + ' GB';
-        }
-        
-        // Show error message
-        function showError(message) {
-            const error = document.createElement('div');
-            error.className = 'error-item';
-            error.textContent = message;
-            errorContainer.appendChild(error);
             
-            // Remove error after 5 seconds
-            setTimeout(() => {
-                error.remove();
-            }, 5000);
-        }
-        
-        // Handle form submission
-        form.addEventListener('submit', function(e) {
-            // Always prevent default to simulate submission without actual processing
-            e.preventDefault();
-            
-            // Validate that we have a video
-            if (!uploadedVideo) {
-                showError('Please upload a video file');
-                return;
-            }
-            
-            // Check if a scheduled time is selected
-            const scheduledTime = document.getElementById('scheduled_time').value;
-            if (!scheduledTime) {
-                showError('Please select a schedule time');
-                return;
-            }
-            
-            // Simulate upload progress
-            progressContainer.style.display = 'block';
-            progressBar.style.width = '0%';
-            
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 2;
-                progressBar.style.width = `${progress}%`;
+            dropArea.addEventListener('drop', function(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
                 
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    // Show success message
-                    const successMessage = document.createElement('div');
-                    successMessage.className = 'alert alert-success';
-                    successMessage.innerHTML = 'Your video has been uploaded and scheduled! (This is just a UI demo, no actual upload occurred)';
-                    form.parentNode.insertBefore(successMessage, form);
+                if (files && files[0]) {
+                    handleVideoFile(files[0]);
+                }
+            }, false);
+            
+            function handleVideoFile(file) {
+                // Clear previous preview
+                previewContainer.innerHTML = '';
+                errorContainer.innerHTML = '';
+                
+                // Check file type
+                const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-ms-wmv'];
+                if (!validTypes.includes(file.type)) {
+                    showError(`Invalid file type: ${file.name}. Only MP4, MOV, AVI, and WMV formats are supported.`);
+                    return;
+                }
+                
+                // Check file size (100MB max)
+                if (file.size > 100 * 1024 * 1024) {
+                    showError(`File too large: ${file.name}. Maximum size is 100MB.`);
+                    return;
+                }
+                
+                uploadedVideo = file;
+                
+                // Create video preview
+                const preview = document.createElement('div');
+                preview.className = 'preview-item';
+                
+                const video = document.createElement('video');
+                video.controls = true;
+                video.src = URL.createObjectURL(file);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'preview-remove';
+                removeBtn.innerHTML = '×';
+                removeBtn.addEventListener('click', function() {
+                    clearVideoPreview();
+                    fileInput.value = '';
+                });
+                
+                preview.appendChild(video);
+                preview.appendChild(removeBtn);
+                previewContainer.appendChild(preview);
+                
+                // Display video details
+                video.onloadedmetadata = function() {
+                    const duration = Math.round(video.duration);
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                     
-                    // Hide form
-                    form.style.display = 'none';
+                    const size = formatFileSize(file.size);
+                    
+                    const details = document.createElement('div');
+                    details.className = 'video-details';
+                    details.innerHTML = `
+                        <strong>File:</strong> ${file.name}<br>
+                        <strong>Type:</strong> ${file.type}<br>
+                        <strong>Size:</strong> ${size}<br>
+                        <strong>Duration:</strong> ${formattedDuration}
+                    `;
+                    preview.appendChild(details);
+                    
+                    // Check if video is too long
+                    const maxDuration = {{ max_video_duration|default:180 }};
+                    if (duration > maxDuration) {
+                        showError(`Video duration (${formattedDuration}) exceeds the maximum allowed duration of ${maxDuration} seconds.`);
+                    }
+                };
+            }
+            
+            // Clear video preview
+            function clearVideoPreview() {
+                uploadedVideo = null;
+                previewContainer.innerHTML = '';
+                
+                // Clear validation errors related to video
+                const videoErrors = document.querySelectorAll('.error-item');
+                videoErrors.forEach(error => {
+                    if (error.textContent.includes('video') || error.textContent.includes('Video')) {
+                        error.remove();
+                    }
+                });
+            }
+            
+            // Format file size
+            function formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + ' bytes';
+                else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+                else if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
+                else return (bytes / 1073741824).toFixed(2) + ' GB';
+            }
+            
+            // Show error message
+            function showError(message) {
+                const error = document.createElement('div');
+                error.className = 'error-item alert alert-danger';
+                error.textContent = message;
+                errorContainer.appendChild(error);
+            }
+            
+            // Handle form submission
+            const form = document.getElementById('video-form');
+            form.addEventListener('submit', function(e) {
+                // Don't prevent default to allow actual form submission
+                
+                // Check that either a video URL or file is provided
+                const videoUrl = document.getElementById('video_url').value.trim();
+                if (!uploadedVideo && !videoUrl) {
+                    e.preventDefault();
+                    showError('Please either upload a video file or provide a video URL');
+                    return;
                 }
-            }, 50);
-        });
+                
+                // Check if a scheduled time is selected
+                const scheduledTime = document.getElementById('scheduled_time').value;
+                if (!scheduledTime) {
+                    e.preventDefault();
+                    showError('Please select a schedule time');
+                    return;
+                }
+            });
         });
     </script>
 {% endblock %} 
