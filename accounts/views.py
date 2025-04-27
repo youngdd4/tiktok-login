@@ -299,81 +299,91 @@ def tiktok_callback(request):
 
 def dashboard(request):
     """Display user dashboard with TikTok profile info and videos from session"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
-    
-    # Get profile info from session
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-        'profile_deep_link': request.session.get('tiktok_profile_deep_link', None),
-        'bio': request.session.get('tiktok_bio', None),
-        'is_verified': request.session.get('tiktok_is_verified', False),
-        'tiktok_handle': request.session.get('tiktok_handle', None),
-        'follower_count': request.session.get('tiktok_follower_count', 0),
-        'following_count': request.session.get('tiktok_following_count', 0),
-        'likes_count': request.session.get('tiktok_likes_count', 0),
-        'video_count': request.session.get('tiktok_video_count', 0)
-    }
-    
-    # Check if we have an access token to fetch videos
-    if 'tiktok_access_token' in request.session:
-        access_token = request.session.get('tiktok_access_token')
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
         
-        # Try to fetch TikTok videos
-        try:
-            # API endpoint for videos
-            videos_url = "https://open.tiktokapis.com/v2/video/list/"
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
+        # Get profile info from session
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'profile_deep_link': request.session.get('tiktok_profile_deep_link', None),
+            'bio': request.session.get('tiktok_bio', None),
+            'is_verified': request.session.get('tiktok_is_verified', False),
+            'tiktok_handle': request.session.get('tiktok_handle', None),
+            'follower_count': request.session.get('tiktok_follower_count', 0),
+            'following_count': request.session.get('tiktok_following_count', 0),
+            'likes_count': request.session.get('tiktok_likes_count', 0),
+            'video_count': request.session.get('tiktok_video_count', 0)
+        }
+        
+        # Check if we have an access token to fetch videos
+        if 'tiktok_access_token' in request.session:
+            access_token = request.session.get('tiktok_access_token')
             
-            # Request data - get up to 6 recent videos with specific fields
-            data = {
-                'max_count': 6,
-                'fields': ['id', 'title', 'video_description', 'duration', 'cover_image_url', 'embed_link', 'share_url']
-            }
-            
-            print("Attempting to fetch TikTok videos", file=sys.stderr)
-            videos_response = requests.post(videos_url, headers=headers, json=data)
-            
-            print(f"Videos response code: {videos_response.status_code}", file=sys.stderr)
-            print(f"Videos response content: {videos_response.text}", file=sys.stderr)
-            
-            if videos_response.status_code == 200:
-                videos_data = videos_response.json()
-                videos = videos_data.get('data', {}).get('videos', [])
+            # Try to fetch TikTok videos
+            try:
+                # API endpoint for videos
+                videos_url = "https://open.tiktokapis.com/v2/video/list/"
+                headers = {
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json'
+                }
                 
-                # Add videos to context if available
-                if videos:
-                    context['videos'] = videos
-                    print(f"Successfully fetched {len(videos)} TikTok videos", file=sys.stderr)
+                # Request data - get up to 6 recent videos with specific fields
+                data = {
+                    'max_count': 6,
+                    'fields': ['id', 'title', 'video_description', 'duration', 'cover_image_url', 'embed_link', 'share_url']
+                }
+                
+                print("Attempting to fetch TikTok videos", file=sys.stderr)
+                videos_response = requests.post(videos_url, headers=headers, json=data)
+                
+                print(f"Videos response code: {videos_response.status_code}", file=sys.stderr)
+                print(f"Videos response content: {videos_response.text}", file=sys.stderr)
+                
+                if videos_response.status_code == 200:
+                    videos_data = videos_response.json()
+                    videos = videos_data.get('data', {}).get('videos', [])
+                    
+                    # Add videos to context if available
+                    if videos:
+                        context['videos'] = videos
+                        print(f"Successfully fetched {len(videos)} TikTok videos", file=sys.stderr)
+            
+            except Exception as e:
+                print(f"Error fetching TikTok videos: {str(e)}", file=sys.stderr)
+                # Continue without videos
         
-        except Exception as e:
-            print(f"Error fetching TikTok videos: {str(e)}", file=sys.stderr)
-            # Continue without videos
-    
-    # Get recent notifications
-    if request.session.get('user_id'):
-        try:
-            user_id = request.session.get('user_id')
-            notifications = Notification.objects.filter(user_id=user_id, read=False)[:5]
-            context['notifications'] = notifications
-        except Exception as e:
-            print(f"Error fetching notifications: {str(e)}", file=sys.stderr)
-    
-    # Get scheduled posts
-    if request.session.get('user_id'):
-        try:
-            user_id = request.session.get('user_id')
-            scheduled_posts = ScheduledPost.objects.filter(user_id=user_id, status='scheduled')[:3]
-            context['scheduled_posts'] = scheduled_posts
-        except Exception as e:
-            print(f"Error fetching scheduled posts: {str(e)}", file=sys.stderr)
-    
-    return render(request, 'accounts/dashboard.html', context)
+        # Get recent notifications
+        if request.session.get('user_id'):
+            try:
+                user_id = request.session.get('user_id')
+                notifications = Notification.objects.filter(user_id=user_id, read=False)[:5]
+                context['notifications'] = notifications
+            except Exception as e:
+                print(f"Error fetching notifications: {str(e)}", file=sys.stderr)
+        
+        # Get scheduled posts
+        if request.session.get('user_id'):
+            try:
+                user_id = request.session.get('user_id')
+                scheduled_posts = ScheduledPost.objects.filter(user_id=user_id, status='scheduled')[:3]
+                context['scheduled_posts'] = scheduled_posts
+            except Exception as e:
+                print(f"Error fetching scheduled posts: {str(e)}", file=sys.stderr)
+        
+        return render(request, 'accounts/dashboard.html', context)
+
+    except Exception as e:
+        print(f"Error in dashboard view: {str(e)}", file=sys.stderr)
+        # Show a user-friendly error page
+        error_context = {
+            'error_title': 'Dashboard Error',
+            'error_message': 'There was a problem loading your dashboard. Please try logging in again.'
+        }
+        return render(request, 'accounts/error.html', error_context)
 
 def logout_view(request):
     """Log out user by clearing session data"""
@@ -454,68 +464,78 @@ def revoke_token(access_token):
 
 def post_photo_view(request):
     """Display photo posting form and handle submissions"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
-        
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-    }
-    
-    # Handle form submission
-    if request.method == 'POST':
-        # Get form data
-        title = request.POST.get('title', '')
-        description = request.POST.get('description', '')
-        photo_urls = request.POST.get('photo_urls', '').split('\n')
-        photo_urls = [url.strip() for url in photo_urls if url.strip()]
-        privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
-        disable_comment = request.POST.get('disable_comment', '') == 'on'
-        auto_add_music = request.POST.get('auto_add_music', '') == 'on'
-        
-        # Basic validation
-        if not photo_urls:
-            context['error'] = 'Please provide at least one photo URL'
-            return render(request, 'accounts/post_photo.html', context)
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
             
-        if not title:
-            context['error'] = 'Please provide a title for your post'
-            return render(request, 'accounts/post_photo.html', context)
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+        }
         
-        # Attempt to post photos
-        try:
-            result = post_photos_to_tiktok(
-                request.session.get('tiktok_access_token'),
-                title,
-                description,
-                photo_urls,
-                privacy_level,
-                disable_comment,
-                auto_add_music
-            )
+        # Handle form submission
+        if request.method == 'POST':
+            # Get form data
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            photo_urls = request.POST.get('photo_urls', '').split('\n')
+            photo_urls = [url.strip() for url in photo_urls if url.strip()]
+            privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
+            disable_comment = request.POST.get('disable_comment', '') == 'on'
+            auto_add_music = request.POST.get('auto_add_music', '') == 'on'
             
-            if result.get('success'):
-                context['success'] = 'Your photos have been posted to TikTok!'
-                context['publish_id'] = result.get('publish_id')
-            else:
-                context['error'] = result.get('error', 'An unknown error occurred')
+            # Basic validation
+            if not photo_urls:
+                context['error'] = 'Please provide at least one photo URL'
+                return render(request, 'accounts/post_photo.html', context)
+                
+            if not title:
+                context['error'] = 'Please provide a title for your post'
+                return render(request, 'accounts/post_photo.html', context)
+            
+            # Attempt to post photos
+            try:
+                result = post_photos_to_tiktok(
+                    request.session.get('tiktok_access_token'),
+                    title,
+                    description,
+                    photo_urls,
+                    privacy_level,
+                    disable_comment,
+                    auto_add_music
+                )
+                
+                if result.get('success'):
+                    context['success'] = 'Your photos have been posted to TikTok!'
+                    context['publish_id'] = result.get('publish_id')
+                else:
+                    context['error'] = result.get('error', 'An unknown error occurred')
+            
+            except Exception as e:
+                print(f"Error posting photos: {str(e)}", file=sys.stderr)
+                context['error'] = f"Error: {str(e)}"
         
-        except Exception as e:
-            print(f"Error posting photos: {str(e)}", file=sys.stderr)
-            context['error'] = f"Error: {str(e)}"
+        # Query creator info to get available privacy levels
+        access_token = request.session.get('tiktok_access_token')
+        if access_token:
+            try:
+                privacy_levels = get_creator_privacy_levels(access_token)
+                if privacy_levels:
+                    context['privacy_levels'] = privacy_levels
+            except Exception as e:
+                print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
+                # Continue without privacy levels
+        
+        return render(request, 'accounts/post_photo.html', context)
     
-    # Query creator info to get available privacy levels
-    access_token = request.session.get('tiktok_access_token')
-    if access_token:
-        try:
-            privacy_levels = get_creator_privacy_levels(access_token)
-            if privacy_levels:
-                context['privacy_levels'] = privacy_levels
-        except Exception as e:
-            print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
-    
-    return render(request, 'accounts/post_photo.html', context)
+    except Exception as e:
+        print(f"Error in post_photo_view: {str(e)}", file=sys.stderr)
+        error_context = {
+            'error_title': 'Photo Posting Error',
+            'error_message': 'There was a problem with the photo posting feature. Please try again later.'
+        }
+        return render(request, 'accounts/error.html', error_context)
 
 def get_creator_privacy_levels(access_token):
     """Get available privacy levels for the creator"""
@@ -635,257 +655,318 @@ def check_post_status(request, publish_id):
 
 def schedule_video_view(request):
     """Display video scheduling form and handle submissions"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+            
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+        }
         
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-    }
-    
-    # Query creator info to get available privacy levels
-    access_token = request.session.get('tiktok_access_token')
-    if access_token:
-        try:
-            privacy_levels = get_creator_privacy_levels(access_token)
-            if privacy_levels:
-                context['privacy_levels'] = privacy_levels
+        # Query creator info to get available privacy levels
+        access_token = request.session.get('tiktok_access_token')
+        if access_token:
+            try:
+                privacy_levels = get_creator_privacy_levels(access_token)
+                if privacy_levels:
+                    context['privacy_levels'] = privacy_levels
+                    
+                # Get creator info for duet, stitch settings
+                creator_info = get_creator_info(access_token)
+                if creator_info:
+                    context['comment_disabled'] = creator_info.get('comment_disabled', False)
+                    context['duet_disabled'] = creator_info.get('duet_disabled', False)
+                    context['stitch_disabled'] = creator_info.get('stitch_disabled', False)
+                    context['max_video_duration'] = creator_info.get('max_video_post_duration_sec', 180)
+            except Exception as e:
+                print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
+                # Continue without creator info
+        
+        # Handle form submission
+        if request.method == 'POST':
+            # Get form data
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            video_url = request.POST.get('video_url', '')
+            scheduled_time_str = request.POST.get('scheduled_time', '')
+            privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
+            disable_comment = request.POST.get('disable_comment', '') == 'on'
+            disable_duet = request.POST.get('disable_duet', '') == 'on'
+            disable_stitch = request.POST.get('disable_stitch', '') == 'on'
+            hashtags = request.POST.get('hashtags', '')
+            
+            # Basic validation
+            if not video_url:
+                context['error'] = 'Please provide a video URL'
+                return render(request, 'accounts/schedule_video.html', context)
                 
-            # Get creator info for duet, stitch settings
-            creator_info = get_creator_info(access_token)
-            if creator_info:
-                context['comment_disabled'] = creator_info.get('comment_disabled', False)
-                context['duet_disabled'] = creator_info.get('duet_disabled', False)
-                context['stitch_disabled'] = creator_info.get('stitch_disabled', False)
-                context['max_video_duration'] = creator_info.get('max_video_post_duration_sec', 180)
-        except Exception as e:
-            print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
-    
-    # Handle form submission
-    if request.method == 'POST':
-        # Get form data
-        title = request.POST.get('title', '')
-        description = request.POST.get('description', '')
-        video_url = request.POST.get('video_url', '')
-        scheduled_time_str = request.POST.get('scheduled_time', '')
-        privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
-        disable_comment = request.POST.get('disable_comment', '') == 'on'
-        disable_duet = request.POST.get('disable_duet', '') == 'on'
-        disable_stitch = request.POST.get('disable_stitch', '') == 'on'
-        hashtags = request.POST.get('hashtags', '')
-        
-        # Basic validation
-        if not video_url:
-            context['error'] = 'Please provide a video URL'
-            return render(request, 'accounts/schedule_video.html', context)
-            
-        if not title:
-            context['error'] = 'Please provide a title for your post'
-            return render(request, 'accounts/schedule_video.html', context)
-        
-        if not scheduled_time_str:
-            context['error'] = 'Please provide a scheduled time for your post'
-            return render(request, 'accounts/schedule_video.html', context)
-        
-        try:
-            # Parse scheduled time
-            scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
-            scheduled_time = timezone.make_aware(scheduled_time)
-            
-            # Check if scheduled time is in the past
-            if scheduled_time < timezone.now():
-                context['error'] = 'Scheduled time cannot be in the past'
+            if not title:
+                context['error'] = 'Please provide a title for your post'
                 return render(request, 'accounts/schedule_video.html', context)
             
-            # Create the scheduled post
-            user_id = request.session.get('user_id')
-            if not user_id:
-                # If no user_id in session, create a user record
-                username = f"tiktok_{request.session.get('tiktok_open_id', uuid.uuid4().hex)}"
-                user, created = User.objects.get_or_create(username=username)
-                user_id = user.id
-                request.session['user_id'] = user_id
+            if not scheduled_time_str:
+                context['error'] = 'Please provide a scheduled time for your post'
+                return render(request, 'accounts/schedule_video.html', context)
             
-            # Create scheduled post
-            post = ScheduledPost.objects.create(
-                user_id=user_id,
-                title=title,
-                description=description,
-                media_type='video',
-                media_url=video_url,
-                privacy_level=privacy_level,
-                disable_comment=disable_comment,
-                disable_duet=disable_duet,
-                disable_stitch=disable_stitch,
-                hashtags=hashtags,
-                scheduled_time=scheduled_time
-            )
-            
-            # Create a notification
-            Notification.objects.create(
-                user_id=user_id,
-                message=f"Video '{title}' has been scheduled for {scheduled_time_str}",
-                type='info',
-                post=post
-            )
-            
-            context['success'] = 'Your video has been scheduled!'
-            return redirect('accounts:scheduled_posts')
-            
-        except Exception as e:
-            print(f"Error scheduling video: {str(e)}", file=sys.stderr)
-            context['error'] = f"Error: {str(e)}"
+            try:
+                # Parse scheduled time
+                scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                scheduled_time = timezone.make_aware(scheduled_time)
+                
+                # Check if scheduled time is in the past
+                if scheduled_time < timezone.now():
+                    context['error'] = 'Scheduled time cannot be in the past'
+                    return render(request, 'accounts/schedule_video.html', context)
+                
+                # Create the scheduled post
+                user_id = request.session.get('user_id')
+                if not user_id:
+                    # If no user_id in session, create a user record
+                    username = f"tiktok_{request.session.get('tiktok_open_id', uuid.uuid4().hex)}"
+                    user, created = User.objects.get_or_create(username=username)
+                    user_id = user.id
+                    request.session['user_id'] = user_id
+                
+                # Create scheduled post
+                post = ScheduledPost.objects.create(
+                    user_id=user_id,
+                    title=title,
+                    description=description,
+                    media_type='video',
+                    media_url=video_url,
+                    privacy_level=privacy_level,
+                    disable_comment=disable_comment,
+                    disable_duet=disable_duet,
+                    disable_stitch=disable_stitch,
+                    hashtags=hashtags,
+                    scheduled_time=scheduled_time
+                )
+                
+                # Create a notification
+                Notification.objects.create(
+                    user_id=user_id,
+                    message=f"Video '{title}' has been scheduled for {scheduled_time_str}",
+                    type='info',
+                    post=post
+                )
+                
+                context['success'] = 'Your video has been scheduled!'
+                return redirect('accounts:scheduled_posts')
+                
+            except Exception as e:
+                print(f"Error scheduling video: {str(e)}", file=sys.stderr)
+                context['error'] = f"Error: {str(e)}"
+        
+        return render(request, 'accounts/schedule_video.html', context)
     
-    return render(request, 'accounts/schedule_video.html', context)
+    except Exception as e:
+        print(f"Error in schedule_video_view: {str(e)}", file=sys.stderr)
+        error_context = {
+            'error_title': 'Video Scheduling Error',
+            'error_message': 'There was a problem with the video scheduling feature. Please try again later.'
+        }
+        return render(request, 'accounts/error.html', error_context)
 
 def scheduled_posts_view(request):
     """Display a list of scheduled posts"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+        
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+        }
+        
+        # Get scheduled posts
+        user_id = request.session.get('user_id')
+        if user_id:
+            try:
+                posts = ScheduledPost.objects.filter(user_id=user_id)
+                context['posts'] = posts
+            except Exception as e:
+                error_msg = f"Error fetching scheduled posts: {str(e)}"
+                print(error_msg, file=sys.stderr)
+                context['error'] = "Could not retrieve your scheduled posts"
+        
+        return render(request, 'accounts/scheduled_posts.html', context)
     
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-    }
-    
-    # Get scheduled posts
-    user_id = request.session.get('user_id')
-    if user_id:
-        posts = ScheduledPost.objects.filter(user_id=user_id)
-        context['posts'] = posts
-    
-    return render(request, 'accounts/scheduled_posts.html', context)
+    except Exception as e:
+        error_msg = f"Error in scheduled_posts_view: {str(e)}"
+        print(error_msg, file=sys.stderr)
+        
+        # Instead of rendering an error template, log the error and render the regular template
+        # with an error message in the context
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'error': 'There was a problem loading your scheduled posts. Please try again later.'
+        }
+        return render(request, 'accounts/scheduled_posts.html', context)
 
 def edit_scheduled_post(request, post_id):
     """Edit a scheduled post"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
-    
-    # Get the post
-    user_id = request.session.get('user_id')
-    post = get_object_or_404(ScheduledPost, id=post_id, user_id=user_id)
-    
-    # Only allow editing of scheduled posts
-    if not post.is_scheduled:
-        return redirect('accounts:scheduled_posts')
-    
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-        'post': post
-    }
-    
-    # Query creator info to get available privacy levels
-    access_token = request.session.get('tiktok_access_token')
-    if access_token:
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+        
+        # Get the post
+        user_id = request.session.get('user_id')
         try:
-            privacy_levels = get_creator_privacy_levels(access_token)
-            if privacy_levels:
-                context['privacy_levels'] = privacy_levels
-        except Exception as e:
-            print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
-    
-    # Handle form submission
-    if request.method == 'POST':
-        # Get form data
-        title = request.POST.get('title', '')
-        description = request.POST.get('description', '')
-        video_url = request.POST.get('video_url', '')
-        scheduled_time_str = request.POST.get('scheduled_time', '')
-        privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
-        disable_comment = request.POST.get('disable_comment', '') == 'on'
-        disable_duet = request.POST.get('disable_duet', '') == 'on'
-        disable_stitch = request.POST.get('disable_stitch', '') == 'on'
-        hashtags = request.POST.get('hashtags', '')
+            post = get_object_or_404(ScheduledPost, id=post_id, user_id=user_id)
+        except:
+            error_context = {
+                'error_title': 'Post Not Found',
+                'error_message': 'The scheduled post you are trying to edit could not be found.'
+            }
+            return render(request, 'accounts/error.html', error_context)
         
-        # Basic validation
-        if not video_url:
-            context['error'] = 'Please provide a video URL'
-            return render(request, 'accounts/edit_scheduled_post.html', context)
+        # Only allow editing of scheduled posts
+        if not post.is_scheduled:
+            return redirect('accounts:scheduled_posts')
+        
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'post': post
+        }
+        
+        # Query creator info to get available privacy levels
+        access_token = request.session.get('tiktok_access_token')
+        if access_token:
+            try:
+                privacy_levels = get_creator_privacy_levels(access_token)
+                if privacy_levels:
+                    context['privacy_levels'] = privacy_levels
+            except Exception as e:
+                print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
+        
+        # Handle form submission
+        if request.method == 'POST':
+            # Get form data
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            video_url = request.POST.get('video_url', '')
+            scheduled_time_str = request.POST.get('scheduled_time', '')
+            privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
+            disable_comment = request.POST.get('disable_comment', '') == 'on'
+            disable_duet = request.POST.get('disable_duet', '') == 'on'
+            disable_stitch = request.POST.get('disable_stitch', '') == 'on'
+            hashtags = request.POST.get('hashtags', '')
             
-        if not title:
-            context['error'] = 'Please provide a title for your post'
-            return render(request, 'accounts/edit_scheduled_post.html', context)
-        
-        if not scheduled_time_str:
-            context['error'] = 'Please provide a scheduled time for your post'
-            return render(request, 'accounts/edit_scheduled_post.html', context)
-        
-        try:
-            # Parse scheduled time
-            scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
-            scheduled_time = timezone.make_aware(scheduled_time)
-            
-            # Check if scheduled time is in the past
-            if scheduled_time < timezone.now():
-                context['error'] = 'Scheduled time cannot be in the past'
+            # Basic validation
+            if not video_url:
+                context['error'] = 'Please provide a video URL'
+                return render(request, 'accounts/edit_scheduled_post.html', context)
+                
+            if not title:
+                context['error'] = 'Please provide a title for your post'
                 return render(request, 'accounts/edit_scheduled_post.html', context)
             
-            # Update the post
-            post.title = title
-            post.description = description
-            post.media_url = video_url
-            post.privacy_level = privacy_level
-            post.disable_comment = disable_comment
-            post.disable_duet = disable_duet
-            post.disable_stitch = disable_stitch
-            post.hashtags = hashtags
-            post.scheduled_time = scheduled_time
-            post.save()
+            if not scheduled_time_str:
+                context['error'] = 'Please provide a scheduled time for your post'
+                return render(request, 'accounts/edit_scheduled_post.html', context)
+            
+            try:
+                # Parse scheduled time
+                scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                scheduled_time = timezone.make_aware(scheduled_time)
+                
+                # Check if scheduled time is in the past
+                if scheduled_time < timezone.now():
+                    context['error'] = 'Scheduled time cannot be in the past'
+                    return render(request, 'accounts/edit_scheduled_post.html', context)
+                
+                # Update the post
+                post.title = title
+                post.description = description
+                post.media_url = video_url
+                post.privacy_level = privacy_level
+                post.disable_comment = disable_comment
+                post.disable_duet = disable_duet
+                post.disable_stitch = disable_stitch
+                post.hashtags = hashtags
+                post.scheduled_time = scheduled_time
+                post.save()
+                
+                # Create a notification
+                Notification.objects.create(
+                    user_id=user_id,
+                    message=f"Video '{title}' has been updated",
+                    type='info',
+                    post=post
+                )
+                
+                return redirect('accounts:scheduled_posts')
+                
+            except Exception as e:
+                print(f"Error updating post: {str(e)}", file=sys.stderr)
+                context['error'] = f"Error: {str(e)}"
+        
+        return render(request, 'accounts/edit_scheduled_post.html', context)
+    
+    except Exception as e:
+        print(f"Error in edit_scheduled_post: {str(e)}", file=sys.stderr)
+        error_context = {
+            'error_title': 'Edit Post Error',
+            'error_message': 'There was a problem editing your scheduled post. Please try again later.'
+        }
+        return render(request, 'accounts/error.html', error_context)
+
+def delete_scheduled_post(request, post_id):
+    """Delete a scheduled post"""
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+        
+        # Get the post
+        user_id = request.session.get('user_id')
+        try:
+            post = get_object_or_404(ScheduledPost, id=post_id, user_id=user_id)
+        except:
+            error_context = {
+                'error_title': 'Post Not Found',
+                'error_message': 'The scheduled post you are trying to delete could not be found.'
+            }
+            return render(request, 'accounts/error.html', error_context)
+        
+        # Only allow deletion of scheduled posts
+        if not post.is_scheduled:
+            return redirect('accounts:scheduled_posts')
+        
+        if request.method == 'POST':
+            post_title = post.title
+            post.delete()
             
             # Create a notification
             Notification.objects.create(
                 user_id=user_id,
-                message=f"Video '{title}' has been updated",
-                type='info',
-                post=post
+                message=f"Video '{post_title}' has been deleted",
+                type='info'
             )
             
             return redirect('accounts:scheduled_posts')
-            
-        except Exception as e:
-            print(f"Error updating post: {str(e)}", file=sys.stderr)
-            context['error'] = f"Error: {str(e)}"
-    
-    return render(request, 'accounts/edit_scheduled_post.html', context)
-
-def delete_scheduled_post(request, post_id):
-    """Delete a scheduled post"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
-    
-    # Get the post
-    user_id = request.session.get('user_id')
-    post = get_object_or_404(ScheduledPost, id=post_id, user_id=user_id)
-    
-    # Only allow deletion of scheduled posts
-    if not post.is_scheduled:
-        return redirect('accounts:scheduled_posts')
-    
-    if request.method == 'POST':
-        post_title = post.title
-        post.delete()
         
-        # Create a notification
-        Notification.objects.create(
-            user_id=user_id,
-            message=f"Video '{post_title}' has been deleted",
-            type='info'
-        )
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+            'post': post
+        }
         
-        return redirect('accounts:scheduled_posts')
+        return render(request, 'accounts/delete_scheduled_post.html', context)
     
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-        'post': post
-    }
-    
-    return render(request, 'accounts/delete_scheduled_post.html', context)
+    except Exception as e:
+        print(f"Error in delete_scheduled_post: {str(e)}", file=sys.stderr)
+        error_context = {
+            'error_title': 'Delete Post Error',
+            'error_message': 'There was a problem deleting your scheduled post. Please try again later.'
+        }
+        return render(request, 'accounts/error.html', error_context)
 
 def analytics_dashboard(request):
     """Display analytics dashboard"""
@@ -1065,22 +1146,35 @@ def post_video_to_tiktok(access_token, title, video_url, privacy_level, disable_
 
 def notifications_view(request):
     """Display user notifications"""
-    # Check if user is authenticated with TikTok
-    if not request.session.get('tiktok_authenticated'):
-        return redirect('accounts:login')
+    try:
+        # Check if user is authenticated with TikTok
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+        
+        context = {
+            'username': request.session.get('tiktok_username', 'TikTok User'),
+            'profile_picture': request.session.get('tiktok_profile_picture', None),
+        }
+        
+        # Get notifications
+        user_id = request.session.get('user_id')
+        if user_id:
+            try:
+                notifications = Notification.objects.filter(user_id=user_id)
+                context['notifications'] = notifications
+            except Exception as e:
+                print(f"Error fetching notifications: {str(e)}", file=sys.stderr)
+                context['error'] = "Could not retrieve your notifications"
+        
+        return render(request, 'accounts/notifications.html', context)
     
-    context = {
-        'username': request.session.get('tiktok_username', 'TikTok User'),
-        'profile_picture': request.session.get('tiktok_profile_picture', None),
-    }
-    
-    # Get notifications
-    user_id = request.session.get('user_id')
-    if user_id:
-        notifications = Notification.objects.filter(user_id=user_id)
-        context['notifications'] = notifications
-    
-    return render(request, 'accounts/notifications.html', context)
+    except Exception as e:
+        print(f"Error in notifications_view: {str(e)}", file=sys.stderr)
+        error_context = {
+            'error_title': 'Notifications Error',
+            'error_message': 'There was a problem loading your notifications. Please try again later.'
+        }
+        return render(request, 'accounts/error.html', error_context)
 
 def mark_notification_read(request, notification_id):
     """Mark a notification as read"""
