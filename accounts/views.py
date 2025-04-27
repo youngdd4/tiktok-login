@@ -7,7 +7,7 @@ import uuid
 import requests
 from datetime import datetime, timedelta
 import urllib.parse
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 import re
 import time
 
@@ -21,8 +21,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.core.files.uploadedfile import UploadedFile
-from celery.decorators import shared_task
-from urllib.parse import urlparse
+from celery import shared_task
 
 from .models import ScheduledPost, PostAnalytics, Notification, TikTokProfile
 
