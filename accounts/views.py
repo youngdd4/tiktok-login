@@ -1,11 +1,14 @@
 # views.py in accounts app
 
 import os
-import requests
+import sys
 import json
-import sys  # For printing to stderr for debugging
-from datetime import datetime, timedelta
 import uuid
+import requests
+from datetime import datetime, timedelta
+import urllib.parse
+from urllib.parse import urlencode
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.decorators import login_required
@@ -13,8 +16,9 @@ from django.urls import reverse
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
-from urllib.parse import urlparse, urlunparse
-from .models import ScheduledPost, PostAnalytics, Notification
+from django.contrib.auth.models import User
+
+from .models import ScheduledPost, PostAnalytics, Notification, TikTokProfile
 
 def login_view(request):
     """Display login page with TikTok OAuth button"""
@@ -30,323 +34,268 @@ def login_view(request):
 
 def tiktok_login(request):
     """Redirect user to TikTok for authorization"""
-    print("=== INSIDE TIKTOK_LOGIN VIEW ===", file=sys.stderr)
-    
-    client_key = os.environ.get('TIKTOK_CLIENT_KEY')
-    redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
-    
-    print(f"Environment variables:", file=sys.stderr)
-    print(f"TIKTOK_CLIENT_KEY: {'SET' if client_key else 'NOT SET'}", file=sys.stderr)
-    print(f"TIKTOK_REDIRECT_URI: {redirect_uri}", file=sys.stderr)
-    
-    # Check if required environment variables are set
-    if not client_key:
-        print("ERROR: TIKTOK_CLIENT_KEY environment variable is not set", file=sys.stderr)
-        return HttpResponse('TikTok login failed: Client key not configured on the server.', status=500)
-    
-    if not redirect_uri:
-        print("ERROR: TIKTOK_REDIRECT_URI environment variable is not set", file=sys.stderr)
-        return HttpResponse('TikTok login failed: Redirect URI not configured on the server.', status=500)
-    
-    # Ensure session exists before using session_key as CSRF state token
-    if not request.session.session_key:
-        request.session.create()
-    
-    # Generate a secure CSRF state token and store it in the session
-    csrf_state = request.session.session_key
-    print(f"Using state token: {csrf_state}", file=sys.stderr)
-    
-    # Clean the redirect URI according to TikTok's requirements:
-    # 1. Must be absolute and begin with https
-    # 2. Must be static (no parameters)
-    # 3. No fragment or hash character
-    parsed_uri = urlparse(redirect_uri)
-    clean_redirect_uri = urlunparse((
-        parsed_uri.scheme,
-        parsed_uri.netloc,
-        parsed_uri.path.rstrip('/'),  # Remove trailing slash
-        '',  # params
-        '',  # query - must be empty per TikTok docs
-        ''   # fragment - must be empty per TikTok docs
-    ))
-    
-    print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
-    print(f"Cleaned redirect_uri: {clean_redirect_uri}", file=sys.stderr)
-    
-    # TikTok OAuth authorization URL - following exact format from documentation
-    auth_url = 'https://www.tiktok.com/v2/auth/authorize/'
-    auth_url += f'?client_key={client_key}'
-    auth_url += '&response_type=code'
-    auth_url += '&scope=user.info.basic,user.info.profile,user.info.stats,video.list'
-    auth_url += f'&redirect_uri={clean_redirect_uri}'
-    auth_url += f'&state={csrf_state}'
-    
-    print(f"Redirecting to TikTok auth URL: {auth_url}", file=sys.stderr)
-    return redirect(auth_url)
+    try:
+        # Get settings from environment variables
+        client_key = os.environ.get('TIKTOK_CLIENT_KEY')
+        client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')  # Not used here but in callback
+        redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI', 'https://emmanueltech.store/accounts/login/tiktok/callback/')
+        
+        if not client_key:
+            print("Error: TIKTOK_CLIENT_KEY not found in environment variables", file=sys.stderr)
+            return render(request, 'accounts/login.html', {'error': 'TikTok Client Key not configured'})
+        
+        # Generate random state to prevent CSRF
+        csrf_state = uuid.uuid4().hex
+        
+        # Store state in session
+        request.session['tiktok_csrf_state'] = csrf_state
+        
+        # Log information
+        print(f"Environment variables:", file=sys.stderr)
+        print(f"TIKTOK_CLIENT_KEY: {'SET' if client_key else 'NOT SET'}", file=sys.stderr)
+        print(f"TIKTOK_CLIENT_SECRET: {'SET' if client_secret else 'NOT SET'}", file=sys.stderr)
+        print(f"TIKTOK_REDIRECT_URI: {redirect_uri}", file=sys.stderr)
+        
+        # Clean the redirect URI 
+        # Requirements for redirect_uri:
+        # 1. Must be https (except for localhost)
+        # 2. Must be static (no parameters)
+        # 3. No fragment or hash character
+        parsed_uri = urllib.parse.urlparse(redirect_uri)
+        clean_redirect_uri = urllib.parse.urlunparse((
+            parsed_uri.scheme,
+            parsed_uri.netloc,
+            parsed_uri.path,
+            '',  # No params
+            '',  # No query
+            ''   # No fragment
+        ))
+        
+        print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
+        print(f"Cleaned redirect_uri for token exchange: {clean_redirect_uri}", file=sys.stderr)
+        
+        # TikTok OAuth authorization URL - following exact format from documentation
+        auth_url = 'https://www.tiktok.com/v2/auth/authorize/'
+        auth_url += f'?client_key={client_key}'
+        auth_url += '&response_type=code'
+        auth_url += '&scope=user.info.basic,user.info.profile,user.info.stats,video.list,video.upload,video.publish'
+        auth_url += f'&redirect_uri={clean_redirect_uri}'
+        auth_url += f'&state={csrf_state}'
+        
+        print(f"Redirecting to TikTok auth URL: {auth_url}", file=sys.stderr)
+        return redirect(auth_url)
+        
+    except Exception as e:
+        print(f"Error in tiktok_login: {str(e)}", file=sys.stderr)
+        return render(request, 'accounts/login.html', {'error': f'Error during TikTok login setup: {str(e)}'})
 
 def tiktok_callback(request):
     """Handle callback from TikTok OAuth"""
-    print("=== INSIDE TIKTOK CALLBACK VIEW ===", file=sys.stderr)
-    print(f"Request method: {request.method}", file=sys.stderr)
-    print(f"Request GET params: {request.GET}", file=sys.stderr)
-    
-    # Get parameters from the callback
-    code = request.GET.get('code')
-    error = request.GET.get('error')
-    error_description = request.GET.get('error_description')
-    state = request.GET.get('state')
-    scopes = request.GET.get('scopes')
-    
-    print(f"Received code: {code}", file=sys.stderr)
-    print(f"Received error: {error}", file=sys.stderr)
-    print(f"Received error_description: {error_description}", file=sys.stderr)
-    print(f"Received state: {state}", file=sys.stderr)
-    print(f"Received scopes: {scopes}", file=sys.stderr)
-    print(f"Current session key: {request.session.session_key}", file=sys.stderr)
-    
-    # If error is present, authorization failed
-    if error:
-        print(f"TikTok returned an error: {error} - {error_description}", file=sys.stderr)
-        return HttpResponse(f"TikTok returned an error: {error} - {error_description}", status=400)
-    
-    # Check if code was returned
-    if not code:
-        print("ERROR: No code received from TikTok", file=sys.stderr)
-        return HttpResponse("Authentication failed: No authorization code received from TikTok.", status=400)
-    
-    # Validate state to prevent CSRF attacks - critical security check
-    if not state:
-        print("ERROR: No state parameter received from TikTok", file=sys.stderr)
-        return HttpResponse("Authentication failed: Missing state parameter in callback.", status=400)
-    
-    # Strict state validation - must match exactly
-    if state != request.session.session_key:
-        print(f"ERROR: State mismatch. Received: {state}, Expected: {request.session.session_key}", file=sys.stderr)
-        return HttpResponse("Authentication failed: Invalid state parameter. This could be a CSRF attack attempt.", status=400)
-    
-    # Get environment variables for token exchange
-    client_key = os.environ.get('TIKTOK_CLIENT_KEY')
-    client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
-    redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
-    
-    print(f"Environment variables:", file=sys.stderr)
-    print(f"TIKTOK_CLIENT_KEY: {'SET' if client_key else 'NOT SET'}", file=sys.stderr)
-    print(f"TIKTOK_CLIENT_SECRET: {'SET' if client_secret else 'NOT SET'}", file=sys.stderr)
-    print(f"TIKTOK_REDIRECT_URI: {redirect_uri}", file=sys.stderr)
-    
-    # Check for required environment variables
-    if not client_key or not client_secret or not redirect_uri:
-        print("ERROR: Missing required environment variables", file=sys.stderr)
-        return HttpResponse("Authentication failed: Server configuration issue.", status=500)
-    
-    # Process redirect_uri to match exactly what was used in the initial request
-    parsed_uri = urlparse(redirect_uri)
-    clean_redirect_uri = urlunparse((
-        parsed_uri.scheme,
-        parsed_uri.netloc,
-        parsed_uri.path.rstrip('/'),  # Remove trailing slash
-        '',  # params
-        '',  # query - must be empty per TikTok docs
-        ''   # fragment - must be empty per TikTok docs
-    ))
-    
-    print(f"Original redirect_uri: {redirect_uri}", file=sys.stderr)
-    print(f"Cleaned redirect_uri for token exchange: {clean_redirect_uri}", file=sys.stderr)
-    
-    # Use the correct token endpoint from docs
-    token_url = "https://open.tiktokapis.com/v2/oauth/token/"
-    token_data = {
-        'client_key': client_key,
-        'client_secret': client_secret,
-        'code': code,
-        'grant_type': 'authorization_code',
-        'redirect_uri': clean_redirect_uri  # Must match the authorization request exactly
-    }
-    
-    print("Attempting token exchange with data:", file=sys.stderr)
-    print(f"client_key: {client_key[:5]}...{client_key[-5:] if client_key else ''}", file=sys.stderr)
-    print(f"client_secret: {'[REDACTED]'}", file=sys.stderr)  # Don't log the secret
-    print(f"code: {code[:5]}...{code[-5:] if code and len(code) > 10 else code}", file=sys.stderr)
-    print(f"redirect_uri: {redirect_uri}", file=sys.stderr)
-    
     try:
-        token_response = requests.post(token_url, data=token_data)
+        # Get settings from environment variables
+        client_key = os.environ.get('TIKTOK_CLIENT_KEY')
+        client_secret = os.environ.get('TIKTOK_CLIENT_SECRET')
+        redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
         
-        print(f"Token exchange response code: {token_response.status_code}", file=sys.stderr)
-        print(f"Token exchange response headers: {token_response.headers}", file=sys.stderr)
-        print(f"Token exchange response content: {token_response.text}", file=sys.stderr)
+        # Get code and state from query parameters
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        error = request.GET.get('error')
+        error_description = request.GET.get('error_description')
+        scopes = request.GET.get('scopes')
         
-        if token_response.status_code != 200:
-            print(f"ERROR: Failed to exchange code for token. Status: {token_response.status_code}", file=sys.stderr)
-            return HttpResponse(f"Failed to exchange code for token. Status: {token_response.status_code}. Response: {token_response.text}", status=400)
+        # Debug info
+        print(f"Received error: {error}", file=sys.stderr)
+        print(f"Received error_description: {error_description}", file=sys.stderr)
+        print(f"Received state: {state}", file=sys.stderr)
+        print(f"Received scopes: {scopes}", file=sys.stderr)
+        print(f"Current session key: {request.session.session_key}", file=sys.stderr)
         
-        # Parse token response
-        token_json = token_response.json()
+        # Exit early if there was an error or no code
+        if error or not code:
+            error_msg = error_description or "Authorization failed"
+            return HttpResponse(f'TikTok login failed: {error_msg}', status=400)
         
-        # Extract data from token response
-        access_token = token_json.get('access_token')
-        open_id = token_json.get('open_id')
+        # Clean redirect_uri as we did in the original request
+        parsed_uri = urllib.parse.urlparse(redirect_uri)
+        clean_redirect_uri = urllib.parse.urlunparse((
+            parsed_uri.scheme,
+            parsed_uri.netloc,
+            parsed_uri.path,
+            '',  # No params
+            '',  # No query
+            ''   # No fragment
+        ))
         
-        if not access_token:
-            print("ERROR: No access token in response", file=sys.stderr)
-            return HttpResponse("Authentication failed: No access token received.", status=400)
+        # Token exchange with TikTok
+        token_url = "https://open.tiktokapis.com/v2/oauth/token/"
+        exchange_data = {
+            'client_key': client_key,
+            'client_secret': client_secret,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': clean_redirect_uri
+        }
+        
+        print("Attempting token exchange with data:", file=sys.stderr)
+        print(f"client_key: {client_key[:5]}...{client_key[-5:]}", file=sys.stderr)
+        print(f"client_secret: [REDACTED]", file=sys.stderr)
+        print(f"code: {code[:5]}...{code[-5:]}", file=sys.stderr)
+        print(f"redirect_uri: {clean_redirect_uri}", file=sys.stderr)
+        
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        
+        response = requests.post(token_url, data=exchange_data, headers=headers)
+        print(f"Token exchange response code: {response.status_code}", file=sys.stderr)
+        print(f"Token exchange response headers: {response.headers}", file=sys.stderr)
+        print(f"Token exchange response content: {response.text}", file=sys.stderr)
+        
+        # Process the token response
+        if response.status_code == 200:
+            token_data = response.json()
             
-        # Store access token in session
-        request.session['tiktok_access_token'] = access_token
-        request.session['tiktok_open_id'] = open_id
-        
-        # Try to fetch user info with the access token
-        success = False
-        username = None
-        profile_picture = None
-        
-        # Try TikTok v2 user info endpoint with different approach
-        try:
-            # Using the user.info endpoint without /v2/ prefix first
-            user_info_url = "https://open.tiktokapis.com/user/info/"
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
+            # Store tokens in session
+            access_token = token_data.get('access_token')
+            refresh_token = token_data.get('refresh_token')
+            open_id = token_data.get('open_id')
             
-            # Simplified fields request
-            data = {
-                'fields': ['open_id', 'avatar_url', 'display_name', 'profile_deep_link']
-            }
-            
-            print("Attempting to fetch user info with alternative endpoint", file=sys.stderr)
-            print(f"User info URL: {user_info_url}", file=sys.stderr)
-            print(f"User info headers: {headers}", file=sys.stderr)
-            print(f"User info data: {data}", file=sys.stderr)
-            
-            user_response = requests.post(user_info_url, headers=headers, json=data)
-            
-            print(f"User info response code: {user_response.status_code}", file=sys.stderr)
-            print(f"User info response headers: {user_response.headers}", file=sys.stderr)
-            print(f"User info response content: {user_response.text}", file=sys.stderr)
-            
-            if user_response.status_code == 200:
-                user_data = user_response.json().get('data', {})
-                username = user_data.get('display_name', '')
-                profile_picture = user_data.get('avatar_url', '')
-                profile_deep_link = user_data.get('profile_deep_link', '')
+            if access_token and open_id:
+                # Store in session for authenticated views
+                request.session['tiktok_access_token'] = access_token
+                request.session['tiktok_refresh_token'] = refresh_token
+                request.session['tiktok_open_id'] = open_id
+                request.session['tiktok_authenticated'] = True
                 
-                if username:
-                    success = True
-                    print(f"Successfully retrieved user info from alternative endpoint", file=sys.stderr)
-        
-        except Exception as e:
-            print(f"Error accessing alternative user info endpoint: {str(e)}", file=sys.stderr)
-
-        # If first attempt failed, try the v2 endpoint again with minimal fields
-        if not success:
-            try:
-                user_info_url = "https://open.tiktokapis.com/v2/user/info/"
-                headers = {
-                    'Authorization': f'Bearer {access_token}',
-                    'Content-Type': 'application/json'
-                }
+                # Try to get user info
+                success = False
                 
-                # Request more comprehensive user data
-                fields = "open_id,avatar_url,avatar_large_url,display_name,profile_deep_link,bio_description,is_verified,username,follower_count,following_count,likes_count,video_count"
-                
-                print("Attempting to fetch user info with v2 endpoint (comprehensive fields)", file=sys.stderr)
-                user_info_url += f"?fields={fields}"
-                
-                user_response = requests.get(user_info_url, headers=headers)
-                
-                print(f"User info response code: {user_response.status_code}", file=sys.stderr)
-                print(f"User info response content: {user_response.text}", file=sys.stderr)
-                
-                if user_response.status_code == 200:
-                    response_data = user_response.json()
-                    if 'data' in response_data and 'user' in response_data['data']:
-                        user_data = response_data['data']['user']
-                        
-                        # Extract basic profile info
+                # Try TikTok v2 user info endpoint with different approach
+                try:
+                    # Using the user.info endpoint without /v2/ prefix first
+                    user_info_url = "https://open.tiktokapis.com/user/info/"
+                    headers = {
+                        'Authorization': f'Bearer {access_token}',
+                        'Content-Type': 'application/json'
+                    }
+                    
+                    # Simplified fields request
+                    data = {
+                        'fields': ['open_id', 'avatar_url', 'display_name', 'profile_deep_link']
+                    }
+                    
+                    print("Attempting to fetch user info with alternative endpoint", file=sys.stderr)
+                    print(f"User info URL: {user_info_url}", file=sys.stderr)
+                    print(f"User info headers: {headers}", file=sys.stderr)
+                    print(f"User info data: {data}", file=sys.stderr)
+                    
+                    user_response = requests.post(user_info_url, headers=headers, json=data)
+                    
+                    print(f"User info response code: {user_response.status_code}", file=sys.stderr)
+                    print(f"User info response headers: {user_response.headers}", file=sys.stderr)
+                    print(f"User info response content: {user_response.text}", file=sys.stderr)
+                    
+                    if user_response.status_code == 200:
+                        user_data = user_response.json().get('data', {})
                         username = user_data.get('display_name', '')
-                        profile_picture = user_data.get('avatar_large_url', '') or user_data.get('avatar_url', '')
+                        profile_picture = user_data.get('avatar_url', '')
                         profile_deep_link = user_data.get('profile_deep_link', '')
                         
-                        # Extract additional profile info
-                        bio = user_data.get('bio_description', '')
-                        is_verified = user_data.get('is_verified', False)
-                        tiktok_username = user_data.get('username', '')
-                        
-                        # Extract stats
-                        follower_count = user_data.get('follower_count', 0)
-                        following_count = user_data.get('following_count', 0)
-                        likes_count = user_data.get('likes_count', 0)
-                        video_count = user_data.get('video_count', 0)
-                        
-                        # If we have the display name, consider it a success
                         if username:
                             success = True
-                            print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
-            
-            except Exception as e:
-                print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
-        
-        # If both attempts failed, use fallback with data from token response
-        if not success:
-            print("API endpoints failed, using token response data", file=sys.stderr)
-            
-            # Get scope and other info from token response
-            scope = token_json.get('scope', '')
-            token_type = token_json.get('token_type', '')
-            
-            # Try to extract a more user-friendly identifier from open_id
-            if open_id:
-                # Use first part of open_id for username to make it more readable
-                # Remove any leading hyphens or special characters
-                clean_id = open_id.lstrip('-')
+                            print(f"Successfully retrieved user info from alternative endpoint", file=sys.stderr)
                 
-                # Create a more user-friendly display name
-                username = f"TikTok User {clean_id[:8]}"
+                except Exception as e:
+                    print(f"Error accessing alternative user info endpoint: {str(e)}", file=sys.stderr)
+
+                # If first attempt failed, try the v2 endpoint again with minimal fields
+                if not success:
+                    try:
+                        user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+                        headers = {
+                            'Authorization': f'Bearer {access_token}',
+                            'Content-Type': 'application/json'
+                        }
+                        
+                        # Request more comprehensive user data
+                        fields = "open_id,avatar_url,avatar_large_url,display_name,profile_deep_link,bio_description,is_verified,username,follower_count,following_count,likes_count,video_count"
+                        
+                        print("Attempting to fetch user info with v2 endpoint (comprehensive fields)", file=sys.stderr)
+                        user_info_url += f"?fields={fields}"
+                        
+                        user_response = requests.get(user_info_url, headers=headers)
+                        
+                        print(f"User info response code: {user_response.status_code}", file=sys.stderr)
+                        print(f"User info response content: {user_response.text}", file=sys.stderr)
+                        
+                        if user_response.status_code == 200:
+                            response_data = user_response.json()
+                            if 'data' in response_data and 'user' in response_data['data']:
+                                user_data = response_data['data']['user']
+                                
+                                # Extract basic profile info
+                                username = user_data.get('display_name', '')
+                                profile_picture = user_data.get('avatar_large_url', '') or user_data.get('avatar_url', '')
+                                profile_deep_link = user_data.get('profile_deep_link', '')
+                                
+                                # Extract additional profile info
+                                bio = user_data.get('bio_description', '')
+                                is_verified = user_data.get('is_verified', False)
+                                tiktok_username = user_data.get('username', '')
+                                
+                                # Extract stats
+                                follower_count = user_data.get('follower_count', 0)
+                                following_count = user_data.get('following_count', 0)
+                                likes_count = user_data.get('likes_count', 0)
+                                video_count = user_data.get('video_count', 0)
+                                
+                                # If we have the display name, consider it a success
+                                if username:
+                                    success = True
+                                    print(f"Successfully retrieved user info from v2 endpoint", file=sys.stderr)
+                                    
+                                    # Store profile info in session
+                                    request.session['tiktok_username'] = username
+                                    request.session['tiktok_profile_picture'] = profile_picture
+                                    request.session['tiktok_profile_deep_link'] = profile_deep_link
+                                    request.session['tiktok_bio'] = bio
+                                    request.session['tiktok_is_verified'] = is_verified
+                                    request.session['tiktok_handle'] = tiktok_username
+                                    request.session['tiktok_follower_count'] = follower_count
+                                    request.session['tiktok_following_count'] = following_count
+                                    request.session['tiktok_likes_count'] = likes_count
+                                    request.session['tiktok_video_count'] = video_count
+                    
+                    except Exception as e:
+                        print(f"Error accessing v2 user info endpoint: {str(e)}", file=sys.stderr)
                 
-                # Log the data we're working with
-                print(f"Using token data - open_id: {open_id}, scope: {scope}", file=sys.stderr)
+                if success:
+                    print(f"Stored in session - Username: {username}", file=sys.stderr)
+                    
+                    # Handle user creation/linking
+                    # Check if we already have a user with this TikTok ID
+                    user_id = request.session.get('user_id')
+                    
+                    if not user_id:
+                        # If no user_id in session, create a user record
+                        username = f"tiktok_{request.session.get('tiktok_open_id', uuid.uuid4().hex)}"
+                        user, created = User.objects.get_or_create(username=username)
+                        user_id = user.id
+                        request.session['user_id'] = user_id
+                    
+                    print(f"Login successful, redirecting to dashboard", file=sys.stderr)
+                    return redirect('accounts:dashboard')
+                else:
+                    return HttpResponse('Failed to retrieve user information from TikTok', status=500)
             else:
-                username = "TikTok User"
-            
-            # No profile picture available when using fallback
-            profile_picture = ""
-        
-        # Store user info in session instead of database
-        request.session['tiktok_username'] = username
-        request.session['tiktok_profile_picture'] = profile_picture
-        request.session['tiktok_authenticated'] = True
-        # Store additional TikTok data that might be useful
-        request.session['tiktok_scope'] = token_json.get('scope', '')
-        
-        # Store profile deep link if available
-        if 'profile_deep_link' in locals() and profile_deep_link:
-            request.session['tiktok_profile_deep_link'] = profile_deep_link
-            
-        # Store additional profile data if available
-        if 'bio' in locals() and bio:
-            request.session['tiktok_bio'] = bio
-        
-        if 'is_verified' in locals():
-            request.session['tiktok_is_verified'] = is_verified
-            
-        if 'tiktok_username' in locals() and tiktok_username:
-            request.session['tiktok_handle'] = tiktok_username
-            
-        # Store stats if available
-        if 'follower_count' in locals():
-            request.session['tiktok_follower_count'] = follower_count
-            request.session['tiktok_following_count'] = following_count
-            request.session['tiktok_likes_count'] = likes_count
-            request.session['tiktok_video_count'] = video_count
-        
-        print(f"Stored in session - Username: {username}", file=sys.stderr)
-        print("Login successful, redirecting to dashboard", file=sys.stderr)
-        return redirect('accounts:dashboard')
-        
+                return HttpResponse('TikTok login failed: Missing access token or open_id in response', status=500)
+        else:
+            return HttpResponse(f'TikTok token exchange failed: {response.text}', status=500)
+    
     except Exception as e:
-        print(f"ERROR: Exception during OAuth process: {str(e)}", file=sys.stderr)
-        return HttpResponse(f"Authentication failed: An error occurred during the login process - {str(e)}", status=500)
+        print(f"Error in tiktok_callback: {str(e)}", file=sys.stderr)
+        return HttpResponse(f'TikTok login failed: {str(e)}', status=500)
 
 def dashboard(request):
     """Display user dashboard with TikTok profile info and videos from session"""
@@ -753,7 +702,6 @@ def schedule_video_view(request):
             user_id = request.session.get('user_id')
             if not user_id:
                 # If no user_id in session, create a user record
-                from django.contrib.auth.models import User
                 username = f"tiktok_{request.session.get('tiktok_open_id', uuid.uuid4().hex)}"
                 user, created = User.objects.get_or_create(username=username)
                 user_id = user.id
@@ -1160,48 +1108,81 @@ def analytics_view(request):
     View function for the TikTok analytics dashboard.
     Displays analytics data for the user's TikTok posts.
     """
-    user = request.user
-    tiktok_authenticated = hasattr(user, 'tiktok_profile') and user.tiktok_profile.is_authenticated
-    
-    context = {
-        'tiktok_authenticated': tiktok_authenticated
-    }
-    
-    if tiktok_authenticated:
-        # Get user profile information
-        tiktok_profile = user.tiktok_profile
-        context.update({
-            'username': tiktok_profile.username,
-            'profile_picture': tiktok_profile.profile_picture,
-        })
+    try:
+        # Check if user is authenticated with TikTok
+        tiktok_authenticated = request.session.get('tiktok_authenticated', False)
         
-        # Get published posts for analytics
-        published_posts = ScheduledPost.objects.filter(
-            user=user, 
-            status='published'
-        ).order_by('-published_at')
+        context = {
+            'tiktok_authenticated': tiktok_authenticated
+        }
         
-        context['published_posts'] = published_posts
-        
-        # Calculate totals
-        total_views = sum(post.analytics.views for post in published_posts if hasattr(post, 'analytics'))
-        total_likes = sum(post.analytics.likes for post in published_posts if hasattr(post, 'analytics'))
-        total_comments = sum(post.analytics.comments for post in published_posts if hasattr(post, 'analytics'))
-        total_shares = sum(post.analytics.shares for post in published_posts if hasattr(post, 'analytics'))
-        
-        # Calculate engagement rate
-        if total_views > 0:
-            engagement_actions = total_likes + total_comments + total_shares
-            engagement_rate = round((engagement_actions / total_views) * 100, 2)
-        else:
-            engagement_rate = 0
+        if tiktok_authenticated:
+            # Get user profile information from session
+            context.update({
+                'username': request.session.get('tiktok_username', 'TikTok User'),
+                'profile_picture': request.session.get('tiktok_profile_picture', None),
+            })
             
-        context.update({
-            'total_views': total_views,
-            'total_likes': total_likes,
-            'total_comments': total_comments,
-            'total_shares': total_shares,
-            'engagement_rate': engagement_rate
-        })
+            # Get access token for API calls
+            access_token = request.session.get('tiktok_access_token')
+            
+            # Get published posts for analytics
+            user_id = request.session.get('user_id')
+            if user_id:
+                try:
+                    published_posts = ScheduledPost.objects.filter(
+                        user_id=user_id, 
+                        status='published'
+                    ).select_related('analytics')
+                    
+                    # Try to update analytics for posts that have a TikTok ID
+                    if access_token:
+                        from .tiktok_api import update_post_analytics
+                        for post in published_posts:
+                            if post.tiktok_post_id:
+                                update_post_analytics(post, access_token)
+                    
+                    context['published_posts'] = published_posts
+                    
+                    # Calculate totals safely using try/except to handle missing analytics
+                    total_views = 0
+                    total_likes = 0
+                    total_comments = 0
+                    total_shares = 0
+                    
+                    for post in published_posts:
+                        try:
+                            if hasattr(post, 'analytics'):
+                                total_views += post.analytics.views
+                                total_likes += post.analytics.likes
+                                total_comments += post.analytics.comments
+                                total_shares += post.analytics.shares
+                        except Exception as e:
+                            print(f"Error processing analytics for post {post.id}: {str(e)}", file=sys.stderr)
+                    
+                    # Calculate engagement rate
+                    if total_views > 0:
+                        engagement_actions = total_likes + total_comments + total_shares
+                        engagement_rate = round((engagement_actions / total_views) * 100, 2)
+                    else:
+                        engagement_rate = 0
+                        
+                    context.update({
+                        'total_views': total_views,
+                        'total_likes': total_likes,
+                        'total_comments': total_comments,
+                        'total_shares': total_shares,
+                        'engagement_rate': engagement_rate
+                    })
+                except Exception as e:
+                    print(f"Error fetching published posts: {str(e)}", file=sys.stderr)
+                    context['error'] = "Could not retrieve post analytics data"
+        
+        return render(request, 'accounts/analytics.html', context)
     
-    return render(request, 'accounts/analytics.html', context)
+    except Exception as e:
+        print(f"Error in analytics_view: {str(e)}", file=sys.stderr)
+        context = {
+            'error': "An error occurred while loading analytics."
+        }
+        return render(request, 'accounts/analytics.html', context)

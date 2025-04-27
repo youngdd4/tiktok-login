@@ -7,9 +7,15 @@
 <div class="container mt-4">
     <h1 class="mb-4">TikTok Analytics</h1>
     
+    {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% endif %}
+    
     {% if not tiktok_authenticated %}
         <div class="alert alert-warning">
-            You need to authenticate with TikTok first. Please go to your <a href="{% url 'accounts:settings' %}">account settings</a> to connect your TikTok account.
+            You need to authenticate with TikTok first. Please go to your <a href="{% url 'accounts:dashboard' %}">dashboard</a> to connect your TikTok account.
         </div>
     {% else %}
         <div class="card mb-4">
@@ -89,7 +95,7 @@
                         {% for post in published_posts %}
                             <tr>
                                 <td>{{ post.title }}</td>
-                                <td>{{ post.published_at|date:"M d, Y" }}</td>
+                                <td>{{ post.updated_at|date:"M d, Y" }}</td>
                                 <td>{{ post.analytics.views|default:"0" }}</td>
                                 <td>{{ post.analytics.likes|default:"0" }}</td>
                                 <td>{{ post.analytics.comments|default:"0" }}</td>
@@ -105,5 +111,9 @@
             </div>
         {% endif %}
     {% endif %}
+    
+    <div class="mt-4">
+        <a href="{% url 'accounts:dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
 </div>
 {% endblock %} 
