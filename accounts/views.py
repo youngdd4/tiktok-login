@@ -8,6 +8,8 @@ import requests
 from datetime import datetime, timedelta
 import urllib.parse
 from urllib.parse import urlencode
+import re
+import time
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import logout as django_logout
@@ -17,6 +19,10 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.utils.text import slugify
+from django.core.files.uploadedfile import UploadedFile
+from celery.decorators import shared_task
+from urllib.parse import urlparse
 
 from .models import ScheduledPost, PostAnalytics, Notification, TikTokProfile
 
@@ -479,19 +485,61 @@ def post_photo_view(request):
             # Get form data
             title = request.POST.get('title', '')
             description = request.POST.get('description', '')
-            photo_urls = request.POST.get('photo_urls', '').split('\n')
-            photo_urls = [url.strip() for url in photo_urls if url.strip()]
             privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
             disable_comment = request.POST.get('disable_comment', '') == 'on'
             auto_add_music = request.POST.get('auto_add_music', '') == 'on'
             
+            # Check for uploaded files first
+            uploaded_files = request.FILES.getlist('photos')
+            photo_urls = []
+            
+            if uploaded_files:
+                # Process uploaded files
+                for uploaded_file in uploaded_files:
+                    # Validate file type
+                    if not uploaded_file.content_type in ['image/jpeg', 'image/png', 'image/webp']:
+                        context['error'] = f'Invalid file type: {uploaded_file.name}. Only JPEG, PNG, and WebP formats are supported.'
+                        return render(request, 'accounts/post_photo.html', context)
+                    
+                    # Validate file size (20MB max)
+                    if uploaded_file.size > 20 * 1024 * 1024:
+                        context['error'] = f'File too large: {uploaded_file.name}. Maximum size is 20MB.'
+                        return render(request, 'accounts/post_photo.html', context)
+                
+                # If validation passes, save files and get URLs
+                for uploaded_file in uploaded_files:
+                    # Save file to a temporary location with a unique name
+                    file_name = f"{uuid.uuid4()}_{secure_filename(uploaded_file.name)}"
+                    file_path = os.path.join(settings.MEDIA_ROOT, 'temp_uploads', file_name)
+                    
+                    # Ensure directory exists
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    
+                    # Save the file
+                    with open(file_path, 'wb+') as destination:
+                        for chunk in uploaded_file.chunks():
+                            destination.write(chunk)
+                    
+                    # Get full URL to the file
+                    file_url = request.build_absolute_uri(settings.MEDIA_URL + 'temp_uploads/' + file_name)
+                    photo_urls.append(file_url)
+            else:
+                # Fall back to URL-based uploads
+                photo_urls = request.POST.get('photo_urls', '').split('\n')
+                photo_urls = [url.strip() for url in photo_urls if url.strip()]
+            
             # Basic validation
             if not photo_urls:
-                context['error'] = 'Please provide at least one photo URL'
+                context['error'] = 'Please provide at least one photo by uploading or entering URLs'
                 return render(request, 'accounts/post_photo.html', context)
                 
             if not title:
                 context['error'] = 'Please provide a title for your post'
+                return render(request, 'accounts/post_photo.html', context)
+            
+            # Limit to 35 photos as per TikTok requirements
+            if len(photo_urls) > 35:
+                context['error'] = 'You can upload a maximum of 35 photos'
                 return render(request, 'accounts/post_photo.html', context)
             
             # Attempt to post photos
@@ -509,12 +557,38 @@ def post_photo_view(request):
                 if result.get('success'):
                     context['success'] = 'Your photos have been posted to TikTok!'
                     context['publish_id'] = result.get('publish_id')
+                    
+                    # Save as scheduled post (but mark as published)
+                    if request.session.get('user_id'):
+                        try:
+                            user = User.objects.get(id=request.session.get('user_id'))
+                            post = ScheduledPost(
+                                user=user,
+                                title=title,
+                                description=description,
+                                media_type='photo',
+                                media_url=','.join(photo_urls),
+                                privacy_level=privacy_level,
+                                disable_comment=disable_comment,
+                                auto_add_music=auto_add_music,
+                                scheduled_time=timezone.now(),
+                                status='published',
+                                publish_id=result.get('publish_id')
+                            )
+                            post.save()
+                        except Exception as e:
+                            print(f"Error saving post record: {str(e)}", file=sys.stderr)
+                            # Continue without saving record
                 else:
                     context['error'] = result.get('error', 'An unknown error occurred')
             
             except Exception as e:
                 print(f"Error posting photos: {str(e)}", file=sys.stderr)
                 context['error'] = f"Error: {str(e)}"
+                
+            # Clean up temporary files after a delay (via background task)
+            if uploaded_files:
+                cleanup_temp_files.apply_async(args=[photo_urls], countdown=3600)  # Clean up after 1 hour
         
         # Query creator info to get available privacy levels
         access_token = request.session.get('tiktok_access_token')
@@ -536,6 +610,36 @@ def post_photo_view(request):
             'error_message': 'There was a problem with the photo posting feature. Please try again later.'
         }
         return render(request, 'accounts/error.html', error_context)
+
+# Helper function to secure filenames
+def secure_filename(filename):
+    """
+    Sanitize a filename by removing potentially dangerous characters
+    """
+    # Replace non-alphanumeric characters with underscores, except for period and some common safe chars
+    filename = re.sub(r'[^\w\.\-]', '_', filename)
+    # Remove leading periods to prevent hidden files
+    filename = filename.lstrip('.')
+    return filename
+
+# Celery task to clean up temporary files
+@shared_task
+def cleanup_temp_files(file_urls):
+    """
+    Clean up temporary files after they've been uploaded to TikTok
+    """
+    try:
+        for url in file_urls:
+            # Extract filename from URL
+            filename = os.path.basename(urlparse(url).path)
+            file_path = os.path.join(settings.MEDIA_ROOT, 'temp_uploads', filename)
+            
+            # Remove file if it exists
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Removed temporary file: {file_path}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error cleaning up temporary files: {str(e)}", file=sys.stderr)
 
 def get_creator_privacy_levels(access_token):
     """Get available privacy levels for the creator"""

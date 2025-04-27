@@ -164,6 +164,133 @@
             cursor: pointer;
             margin-top: 10px;
         }
+        .file-upload {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: background-color 0.3s, border-color 0.3s;
+            position: relative;
+        }
+        .file-upload.drag-over {
+            background-color: rgba(255, 0, 80, 0.1);
+            border-color: #FF0050;
+        }
+        .file-upload input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-upload-icon {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+        .file-upload-text {
+            margin-bottom: 15px;
+            color: #666;
+        }
+        .upload-btn {
+            background-color: #eee;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .preview-container {
+            margin-top: 20px;
+        }
+        .preview-item {
+            position: relative;
+            max-width: 100%;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+        .preview-item video {
+            width: 100%;
+            max-height: 400px;
+            background-color: #000;
+        }
+        .preview-remove {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 10;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            height: 10px;
+            border-radius: 4px;
+            background-color: #FF0050;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .error-item {
+            color: #c62828;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .toggle-section {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #333;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            text-align: left;
+            padding: 0;
+        }
+        .toggle-btn:after {
+            content: '+';
+            margin-left: auto;
+            font-size: 20px;
+        }
+        .toggle-btn.active:after {
+            content: '-';
+        }
+        .toggle-content {
+            display: none;
+            padding-top: 10px;
+        }
+        .video-details {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -200,12 +327,11 @@
                     <li>Minimum resolution: 360px, Maximum: 4096px</li>
                     <li>Maximum duration: {% if max_video_duration %}{{ max_video_duration }} seconds{% else %}180 seconds{% endif %}</li>
                     <li>Maximum file size: 4GB</li>
-                    <li>Video must be hosted on a publicly accessible URL</li>
                 </ul>
             </div>
         </div>
         
-        <form method="post" action="{% url 'accounts:schedule_video' %}">
+        <form method="post" action="{% url 'accounts:schedule_video' %}" enctype="multipart/form-data" id="video-form">
             {% csrf_token %}
             
             <div class="form-group">
@@ -220,9 +346,20 @@
             </div>
             
             <div class="form-group">
-                <label for="video_url">Video URL (Required)</label>
-                <input type="text" id="video_url" name="video_url" required placeholder="Enter the URL of your video">
-                <small>Must be a publicly accessible URL to a video file in a supported format</small>
+                <label>Upload Video</label>
+                <div class="file-upload" id="drop-area">
+                    <div class="file-upload-icon">🎬</div>
+                    <div class="file-upload-text">Drag & drop video here or click to browse</div>
+                    <button type="button" class="upload-btn">Select Video File</button>
+                    <input type="file" id="file-input" name="video" accept="video/mp4,video/webm,video/quicktime" single>
+                </div>
+                <small>Upload a video (MP4, WebM or MOV format, max 4GB)</small>
+                <div id="error-container"></div>
+                <div class="preview-container" id="preview-container"></div>
+                <div class="video-details" id="video-details"></div>
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
             </div>
             
             <div class="form-group">
@@ -253,90 +390,293 @@
             </div>
             
             <div class="checkbox-group">
-                <input type="checkbox" id="disable_comment" name="disable_comment" {% if comment_disabled %}checked{% endif %}>
+                <input type="checkbox" id="disable_comment" name="disable_comment"{% if comment_disabled %} checked{% endif %}>
                 <label for="disable_comment">Disable comments</label>
             </div>
             
             <div class="checkbox-group">
-                <input type="checkbox" id="disable_duet" name="disable_duet" {% if duet_disabled %}checked{% endif %}>
-                <label for="disable_duet">Disable duets</label>
+                <input type="checkbox" id="disable_duet" name="disable_duet"{% if duet_disabled %} checked{% endif %}>
+                <label for="disable_duet">Disable duet</label>
             </div>
             
             <div class="checkbox-group">
-                <input type="checkbox" id="disable_stitch" name="disable_stitch" {% if stitch_disabled %}checked{% endif %}>
-                <label for="disable_stitch">Disable stitches</label>
+                <input type="checkbox" id="disable_stitch" name="disable_stitch"{% if stitch_disabled %} checked{% endif %}>
+                <label for="disable_stitch">Disable stitch</label>
             </div>
             
             <div class="button-container">
                 <a href="{% url 'accounts:dashboard' %}" class="button button-secondary">Back to Dashboard</a>
-                <button type="submit" class="button">Schedule Post</button>
+                <button type="submit" class="button" id="submit-btn">Schedule Video</button>
             </div>
         </form>
     </div>
     
     <script>
-        // Set minimum datetime for scheduling to current time
-        const scheduledTimeInput = document.getElementById('scheduled_time');
-        const now = new Date();
-        now.setMinutes(now.getMinutes() + 5); // Add 5 minutes buffer
-        
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        
-        const minDateTime = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-        scheduledTimeInput.setAttribute('min', minDateTime);
-        scheduledTimeInput.value = minDateTime;
-        
-        // Hashtag functionality
-        const hashtagInput = document.getElementById('hashtag_input');
-        const hashtagContainer = document.getElementById('hashtag-container');
-        const hashtagsHidden = document.getElementById('hashtags');
-        let hashtags = [];
-        
-        function updateHashtagsField() {
-            hashtagsHidden.value = hashtags.join(',');
-        }
-        
-        function addHashtag(tag) {
-            if (!tag || hashtags.includes(tag)) return;
-            
-            hashtags.push(tag);
-            updateHashtagsField();
-            
-            const hashtagElement = document.createElement('div');
-            hashtagElement.className = 'hashtag';
-            hashtagElement.innerHTML = `
-                <span>#${tag}</span>
-                <button type="button" class="remove-hashtag" data-tag="${tag}">&times;</button>
-            `;
-            hashtagContainer.appendChild(hashtagElement);
-            
-            // Add remove event listener
-            const removeButton = hashtagElement.querySelector('.remove-hashtag');
-            removeButton.addEventListener('click', function() {
-                const tagToRemove = this.getAttribute('data-tag');
-                removeHashtag(tagToRemove);
-                hashtagElement.remove();
-            });
-        }
-        
-        function removeHashtag(tag) {
-            hashtags = hashtags.filter(t => t !== tag);
-            updateHashtagsField();
-        }
-        
-        hashtagInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault();
-                const tag = this.value.trim().replace(/^#/, '');
-                if (tag) {
-                    addHashtag(tag);
-                    this.value = '';
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle hashtags
+            const hashtagInput = document.getElementById('hashtag_input');
+            const hashtagContainer = document.getElementById('hashtag-container');
+            const hashtagsHiddenInput = document.getElementById('hashtags');
+            const hashtags = [];
+
+            // Add hashtag when Enter is pressed
+            hashtagInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const hashtag = hashtagInput.value.trim();
+                    if (hashtag && !hashtags.includes(hashtag)) {
+                        addHashtag(hashtag);
+                        hashtagInput.value = '';
+                    }
                 }
+            });
+
+            function addHashtag(hashtag) {
+                hashtags.push(hashtag);
+                
+                const hashtagElement = document.createElement('div');
+                hashtagElement.className = 'hashtag';
+                
+                const hashtagText = document.createElement('span');
+                hashtagText.textContent = `#${hashtag}`;
+                hashtagElement.appendChild(hashtagText);
+                
+                const removeButton = document.createElement('button');
+                removeButton.className = 'remove-hashtag';
+                removeButton.innerHTML = '×';
+                removeButton.addEventListener('click', function() {
+                    const index = hashtags.indexOf(hashtag);
+                    if (index !== -1) {
+                        hashtags.splice(index, 1);
+                        hashtagElement.remove();
+                        updateHashtagsInput();
+                    }
+                });
+                
+                hashtagElement.appendChild(removeButton);
+                hashtagContainer.appendChild(hashtagElement);
+                
+                updateHashtagsInput();
             }
+            
+            function updateHashtagsInput() {
+                hashtagsHiddenInput.value = hashtags.join(',');
+            }
+            
+            // Video upload functionality
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-input');
+            const previewContainer = document.getElementById('preview-container');
+            const videoDetails = document.getElementById('video-details');
+            const errorContainer = document.getElementById('error-container');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const form = document.getElementById('video-form');
+            
+            // Maximum file size in bytes (4GB)
+            const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024;
+            // Allowed file types
+            const ALLOWED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+            
+            // Currently uploaded video
+            let uploadedVideo = null;
+            
+            // Handle click on the upload button
+            dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
+                e.preventDefault();
+                fileInput.click();
+            });
+            
+            // Handle drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, function() {
+                    dropArea.classList.add('drag-over');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, function() {
+                    dropArea.classList.remove('drag-over');
+                }, false);
+            });
+            
+            // Handle dropped files
+            dropArea.addEventListener('drop', function(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    handleVideoFile(files[0]);
+                }
+            });
+            
+            // Handle file input change
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    handleVideoFile(this.files[0]);
+                }
+            });
+            
+            // Handle video file
+            function handleVideoFile(file) {
+                // Clear any previous uploads
+                clearVideoPreview();
+                
+                // Validate file type
+                if (!ALLOWED_TYPES.includes(file.type)) {
+                    showError(`${file.name} is not a valid video type. Please upload MP4, WebM, or MOV files.`);
+                    return;
+                }
+                
+                // Validate file size
+                if (file.size > MAX_FILE_SIZE) {
+                    showError(`${file.name} exceeds the maximum file size of 4GB.`);
+                    return;
+                }
+                
+                // Store the uploaded file
+                uploadedVideo = file;
+                
+                // Create preview
+                createVideoPreview(file);
+            }
+            
+            // Create video preview
+            function createVideoPreview(file) {
+                const preview = document.createElement('div');
+                preview.className = 'preview-item';
+                
+                // Create video element
+                const video = document.createElement('video');
+                video.controls = true;
+                
+                // Create source
+                const source = document.createElement('source');
+                source.src = URL.createObjectURL(file);
+                source.type = file.type;
+                
+                video.appendChild(source);
+                preview.appendChild(video);
+                
+                // Add remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'preview-remove';
+                removeBtn.innerHTML = '×';
+                removeBtn.addEventListener('click', function() {
+                    clearVideoPreview();
+                });
+                preview.appendChild(removeBtn);
+                
+                previewContainer.appendChild(preview);
+                
+                // Display video details
+                video.onloadedmetadata = function() {
+                    const duration = Math.round(video.duration);
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    const size = formatFileSize(file.size);
+                    
+                    videoDetails.innerHTML = `
+                        <strong>File:</strong> ${file.name}<br>
+                        <strong>Type:</strong> ${file.type}<br>
+                        <strong>Size:</strong> ${size}<br>
+                        <strong>Duration:</strong> ${formattedDuration}
+                    `;
+                    
+                    // Check if video is too long
+                    const maxDuration = {{ max_video_duration|default:180 }};
+                    if (duration > maxDuration) {
+                        showError(`Video duration (${formattedDuration}) exceeds the maximum allowed duration of ${maxDuration} seconds.`);
+                    }
+                };
+            }
+            
+            // Clear video preview
+            function clearVideoPreview() {
+                uploadedVideo = null;
+                previewContainer.innerHTML = '';
+                videoDetails.innerHTML = '';
+                
+                // Clear validation errors related to video
+                const videoErrors = document.querySelectorAll('.error-item');
+                videoErrors.forEach(error => {
+                    if (error.textContent.includes('video') || error.textContent.includes('Video')) {
+                        error.remove();
+                    }
+                });
+            }
+            
+            // Format file size
+            function formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + ' bytes';
+                else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+                else if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
+                else return (bytes / 1073741824).toFixed(2) + ' GB';
+            }
+            
+            // Show error message
+            function showError(message) {
+                const error = document.createElement('div');
+                error.className = 'error-item';
+                error.textContent = message;
+                errorContainer.appendChild(error);
+                
+                // Remove error after 5 seconds
+                setTimeout(() => {
+                    error.remove();
+                }, 5000);
+            }
+            
+            // Handle form submission
+            form.addEventListener('submit', function(e) {
+                // Always prevent default to simulate submission without actual processing
+                e.preventDefault();
+                
+                // Validate that we have a video
+                if (!uploadedVideo) {
+                    showError('Please upload a video file');
+                    return;
+                }
+                
+                // Check if a scheduled time is selected
+                const scheduledTime = document.getElementById('scheduled_time').value;
+                if (!scheduledTime) {
+                    showError('Please select a schedule time');
+                    return;
+                }
+                
+                // Simulate upload progress
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
+                
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 2;
+                    progressBar.style.width = `${progress}%`;
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        // Show success message
+                        const successMessage = document.createElement('div');
+                        successMessage.className = 'success-message';
+                        successMessage.innerHTML = 'Your video has been uploaded and scheduled! (This is just a UI demo, no actual upload occurred)';
+                        form.parentNode.insertBefore(successMessage, form);
+                        
+                        // Hide form
+                        form.style.display = 'none';
+                    }
+                }, 50);
+            });
         });
     </script>
 </body>
