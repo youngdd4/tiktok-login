@@ -14,42 +14,70 @@
             height: 100vh;
             margin: 0;
             background-color: #f8f8f8;
+            background: linear-gradient(135deg, #25F4EE 0%, #FE2C55 100%);
         }
         .login-container {
             background-color: white;
             padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
             text-align: center;
-            max-width: 400px;
+            max-width: 500px;
             width: 100%;
         }
         .login-button {
             background-color: #000000;
             color: white;
             border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 4px;
+            padding: 16px 32px;
+            font-size: 18px;
+            border-radius: 50px;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            margin-top: 20px;
+            margin-top: 30px;
             text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: bold;
         }
         .login-button:hover {
-            background-color: #333333;
+            background-color: #FE2C55;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         }
         h1 {
             color: #333;
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+        .app-logo {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+        }
+        .app-description {
+            color: #666;
             margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .tiktok-icon {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="white" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: center;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h1>Login with TikTok</h1>
+        <h1>Welcome to TikTok Manager</h1>
+        <p class="app-description">Connect your TikTok account to manage your content, schedule posts, and track analytics in one place.</p>
+        <p class="app-description">Sign in with your TikTok account to get started.</p>
         <a href="{% url 'accounts:tiktok_login' %}" class="login-button">
+            <span class="tiktok-icon"></span>
             Login with TikTok
         </a>
     </div>

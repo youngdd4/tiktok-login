@@ -3,67 +3,67 @@
 {% block title %}Schedule Video Post{% endblock %}
 
 {% block extra_css %}
-<style>
-    .form-group {
-        margin-bottom: 25px;
-    }
-    label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: bold;
-        color: #333;
-    }
-    textarea {
-        min-height: 120px;
-        resize: vertical;
-    }
-    .checkbox-group {
-        display: flex;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    .checkbox-group input[type="checkbox"] {
-        margin-right: 10px;
-    }
-    .requirements {
-        background-color: #fff8e1;
-        border-left: 4px solid #ffb300;
-        padding: 12px 15px;
-        margin: 15px 0;
-        font-size: 14px;
-    }
-    .hashtag-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 10px;
-    }
-    .hashtag {
-        background-color: #f0f0f0;
-        padding: 8px 12px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-    }
-    .hashtag span {
-        margin-right: 5px;
-    }
-    .remove-hashtag {
-        background: none;
-        border: none;
-        color: #999;
-        cursor: pointer;
-        font-size: 18px;
-    }
-    .add-hashtag-btn {
-        background-color: #eee;
-        color: #333;
-        border: none;
-        border-radius: 4px;
-        padding: 8px 12px;
-        cursor: pointer;
-        margin-top: 10px;
-    }
+    <style>
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .requirements {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffb300;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .hashtag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .hashtag {
+            background-color: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+        }
+        .hashtag span {
+            margin-right: 5px;
+        }
+        .remove-hashtag {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .add-hashtag-btn {
+            background-color: #eee;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
     .file-upload {
         border: 2px dashed #ddd;
         border-radius: 8px;
@@ -161,25 +161,25 @@
         font-size: 14px;
         color: #666;
     }
-</style>
+    </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1>Schedule TikTok Video</h1>
-    
-    {% if success %}
+    <div class="container">
+        <h1>Schedule TikTok Video</h1>
+        
+        {% if success %}
     <div class="alert alert-success">
-        {{ success }}
-    </div>
-    {% endif %}
-    
-    {% if error %}
+            {{ success }}
+        </div>
+        {% endif %}
+        
+        {% if error %}
     <div class="alert alert-danger">
-        {{ error }}
-    </div>
-    {% endif %}
-    
+            {{ error }}
+        </div>
+        {% endif %}
+        
     <div class="card mb-4">
         <div class="card-body">
             <p><strong>Video Scheduling:</strong> Create and schedule videos to be posted to your TikTok account at specific times.</p>
@@ -194,24 +194,24 @@
                     <li>Maximum file size: 4GB</li>
                 </ul>
             </div>
+            </div>
         </div>
-    </div>
-    
-    <form method="post" action="{% url 'accounts:schedule_video' %}" enctype="multipart/form-data" id="video-form">
-        {% csrf_token %}
         
-        <div class="form-group">
-            <label for="title">Title (Required)</label>
+    <form method="post" action="{% url 'accounts:schedule_video' %}" enctype="multipart/form-data" id="video-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="title">Title (Required)</label>
             <input type="text" id="title" name="title" required maxlength="2200" placeholder="Add a title for your post (max 2200 characters)" class="form-control">
             <small class="text-muted">This will be displayed as the caption of your TikTok post. You can use #hashtags and @mentions.</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="description">Description</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
             <textarea id="description" name="description" placeholder="Add additional description for your post (optional)" class="form-control"></textarea>
-        </div>
-        
-        <div class="form-group">
+            </div>
+            
+            <div class="form-group">
             <label>Upload Video</label>
             <div class="file-upload" id="drop-area">
                 <div class="file-upload-icon">🎬</div>
@@ -226,60 +226,60 @@
             <div class="progress-container" id="progress-container">
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
-        </div>
-        
-        <div class="form-group">
-            <label for="hashtags">Hashtags</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="hashtags">Hashtags</label>
             <input type="text" id="hashtag_input" placeholder="Enter a hashtag (without #) and press Enter" class="form-control">
-            <div class="hashtag-container" id="hashtag-container"></div>
-            <input type="hidden" id="hashtags" name="hashtags" value="">
+                <div class="hashtag-container" id="hashtag-container"></div>
+                <input type="hidden" id="hashtags" name="hashtags" value="">
             <small class="text-muted">Add hashtags to increase your video's visibility</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="scheduled_time">Schedule Time (Required)</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="scheduled_time">Schedule Time (Required)</label>
             <input type="datetime-local" id="scheduled_time" name="scheduled_time" required class="form-control">
             <small class="text-muted">Select when you want this video to be posted</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="privacy_level">Privacy Level</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="privacy_level">Privacy Level</label>
             <select id="privacy_level" name="privacy_level" class="form-control">
-                {% for privacy_level in privacy_levels %}
-                    <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
-                {% empty %}
-                    <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
-                    <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
-                    <option value="SELF_ONLY">Self Only</option>
-                {% endfor %}
-            </select>
-        </div>
-        
-        <div class="checkbox-group">
+                    {% for privacy_level in privacy_levels %}
+                        <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
+                    {% empty %}
+                        <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
+                        <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
+                        <option value="SELF_ONLY">Self Only</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="checkbox-group">
             <input type="checkbox" id="disable_comment" name="disable_comment"{% if comment_disabled %} checked{% endif %}>
-            <label for="disable_comment">Disable comments</label>
-        </div>
-        
-        <div class="checkbox-group">
+                <label for="disable_comment">Disable comments</label>
+            </div>
+            
+            <div class="checkbox-group">
             <input type="checkbox" id="disable_duet" name="disable_duet"{% if duet_disabled %} checked{% endif %}>
             <label for="disable_duet">Disable duet</label>
-        </div>
-        
-        <div class="checkbox-group">
+            </div>
+            
+            <div class="checkbox-group">
             <input type="checkbox" id="disable_stitch" name="disable_stitch"{% if stitch_disabled %} checked{% endif %}>
             <label for="disable_stitch">Disable stitch</label>
-        </div>
-        
+            </div>
+            
         <div class="mt-4">
             <a href="{% url 'accounts:dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
             <button type="submit" class="btn btn-primary" id="submit-btn">Schedule Video</button>
-        </div>
-    </form>
-</div>
+            </div>
+        </form>
+    </div>
 {% endblock %}
-
+    
 {% block extra_js %}
-<script>
+    <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Handle hashtags
         const hashtagInput = document.getElementById('hashtag_input');
@@ -316,7 +316,7 @@
                 const index = hashtags.indexOf(hashtag);
                 if (index !== -1) {
                     hashtags.splice(index, 1);
-                    hashtagElement.remove();
+                hashtagElement.remove();
                     updateHashtagsInput();
                 }
             });
@@ -361,7 +361,7 @@
         });
         
         function preventDefaults(e) {
-            e.preventDefault();
+                e.preventDefault();
             e.stopPropagation();
         }
         
@@ -545,6 +545,6 @@
                 }
             }, 50);
         });
-    });
-</script>
+        });
+    </script>
 {% endblock %} 

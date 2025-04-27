@@ -22,11 +22,25 @@ from django.contrib.auth.models import User
 from django.utils.text import slugify
 from django.core.files.uploadedfile import UploadedFile
 from celery import shared_task
+from functools import wraps
 
 from .models import ScheduledPost, PostAnalytics, Notification, TikTokProfile
 
+# TikTok authentication decorator
+def tiktok_login_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.session.get('tiktok_authenticated'):
+            return redirect('accounts:login')
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
 def login_view(request):
     """Display login page with TikTok OAuth button"""
+    # If user is already authenticated, redirect to dashboard
+    if request.session.get('tiktok_authenticated'):
+        return redirect('accounts:dashboard')
+        
     # Debug environment variables - only logs to server, not browser
     client_key = os.environ.get('TIKTOK_CLIENT_KEY')
     redirect_uri = os.environ.get('TIKTOK_REDIRECT_URI')
@@ -302,13 +316,10 @@ def tiktok_callback(request):
         print(f"Error in tiktok_callback: {str(e)}", file=sys.stderr)
         return HttpResponse(f'TikTok login failed: {str(e)}', status=500)
 
+@tiktok_login_required
 def dashboard(request):
     """Display user dashboard with TikTok profile info and videos from session"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-        
         # Get profile info from session
         context = {
             'username': request.session.get('tiktok_username', 'TikTok User'),
@@ -467,13 +478,10 @@ def revoke_token(access_token):
         print(f"Error revoking token: {str(e)}", file=sys.stderr)
         return False
 
+@tiktok_login_required
 def post_photo_view(request):
     """Display photo posting form and handle submissions"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-            
         context = {
             'username': request.session.get('tiktok_username', 'TikTok User'),
             'profile_picture': request.session.get('tiktok_profile_picture', None),
@@ -756,13 +764,10 @@ def check_post_status(request, publish_id):
         print(f"Error checking post status: {str(e)}", file=sys.stderr)
         return JsonResponse({'success': False, 'error': str(e)})
 
+@tiktok_login_required
 def schedule_video_view(request):
     """Display video scheduling form and handle submissions"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-            
         context = {
             'username': request.session.get('tiktok_username', 'TikTok User'),
             'profile_picture': request.session.get('tiktok_profile_picture', None),
@@ -872,13 +877,10 @@ def schedule_video_view(request):
         }
         return render(request, 'accounts/error.html', error_context)
 
+@tiktok_login_required
 def scheduled_posts_view(request):
     """Display a list of scheduled posts"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-        
         context = {
             'username': request.session.get('tiktok_username', 'TikTok User'),
             'profile_picture': request.session.get('tiktok_profile_picture', None),
@@ -910,13 +912,10 @@ def scheduled_posts_view(request):
         }
         return render(request, 'accounts/scheduled_posts.html', context)
 
+@tiktok_login_required
 def edit_scheduled_post(request, post_id):
     """Edit a scheduled post"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-        
         # Get the post
         user_id = request.session.get('user_id')
         try:
@@ -1020,13 +1019,10 @@ def edit_scheduled_post(request, post_id):
         }
         return render(request, 'accounts/error.html', error_context)
 
+@tiktok_login_required
 def delete_scheduled_post(request, post_id):
     """Delete a scheduled post"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-        
         # Get the post
         user_id = request.session.get('user_id')
         try:
@@ -1247,13 +1243,10 @@ def post_video_to_tiktok(access_token, title, video_url, privacy_level, disable_
         print(f"Error in post_video_to_tiktok: {str(e)}", file=sys.stderr)
         return {'success': False, 'error': str(e)}
 
+@tiktok_login_required
 def notifications_view(request):
     """Display user notifications"""
     try:
-        # Check if user is authenticated with TikTok
-        if not request.session.get('tiktok_authenticated'):
-            return redirect('accounts:login')
-        
         context = {
             'username': request.session.get('tiktok_username', 'TikTok User'),
             'profile_picture': request.session.get('tiktok_profile_picture', None),
@@ -1279,6 +1272,7 @@ def notifications_view(request):
         }
         return render(request, 'accounts/error.html', error_context)
 
+@tiktok_login_required
 def mark_notification_read(request, notification_id):
     """Mark a notification as read"""
     if request.method == 'POST':
@@ -1290,6 +1284,7 @@ def mark_notification_read(request, notification_id):
     
     return JsonResponse({'success': False, 'error': 'Method not allowed'})
 
+@tiktok_login_required
 def mark_all_notifications_read(request):
     """Mark all notifications as read"""
     if request.method == 'POST':

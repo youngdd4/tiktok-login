@@ -3,42 +3,42 @@
 {% block title %}Post Photos to TikTok{% endblock %}
 
 {% block extra_css %}
-<style>
-    .form-group {
-        margin-bottom: 25px;
-    }
-    label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: bold;
-        color: #333;
-    }
-    textarea {
-        min-height: 120px;
-        resize: vertical;
-    }
-    .checkbox-group {
-        display: flex;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    .checkbox-group input[type="checkbox"] {
-        margin-right: 10px;
-    }
-    .status-box {
-        border: 1px solid #eee;
-        border-radius: 4px;
-        padding: 15px;
-        margin-top: 30px;
-        display: none;
-    }
-    .requirements {
-        background-color: #fff8e1;
-        border-left: 4px solid #ffb300;
-        padding: 12px 15px;
-        margin: 15px 0;
-        font-size: 14px;
-    }
+    <style>
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .status-box {
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 30px;
+            display: none;
+        }
+        .requirements {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffb300;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
     .file-upload {
         border: 2px dashed #ddd;
         border-radius: 8px;
@@ -133,32 +133,32 @@
         font-size: 14px;
         margin-top: 5px;
     }
-</style>
+    </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1>Post Photos to TikTok</h1>
-    
-    {% if success %}
+    <div class="container">
+        <h1>Post Photos to TikTok</h1>
+        
+        {% if success %}
     <div class="alert alert-success">
-        {{ success }}
-        {% if publish_id %}
-        <div class="status-box" id="status-box" style="display: block;">
-            <p><strong>Publish ID:</strong> {{ publish_id }}</p>
-            <p><strong>Status:</strong> <span id="status-text">Checking...</span></p>
-            <p id="status-details"></p>
+            {{ success }}
+            {% if publish_id %}
+            <div class="status-box" id="status-box" style="display: block;">
+                <p><strong>Publish ID:</strong> {{ publish_id }}</p>
+                <p><strong>Status:</strong> <span id="status-text">Checking...</span></p>
+                <p id="status-details"></p>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
-    </div>
-    {% endif %}
-    
-    {% if error %}
+        
+        {% if error %}
     <div class="alert alert-danger">
-        {{ error }}
-    </div>
-    {% endif %}
-    
+            {{ error }}
+        </div>
+        {% endif %}
+        
     <div class="card mb-4">
         <div class="card-body">
             <p><strong>New Feature:</strong> You can now post photos directly to TikTok through our app!</p>
@@ -171,24 +171,24 @@
                     <li>You can upload up to 35 photos in a single post</li>
                 </ul>
             </div>
+            </div>
         </div>
-    </div>
-    
-    <form method="post" action="{% url 'accounts:post_photo' %}" enctype="multipart/form-data" id="photo-form">
-        {% csrf_token %}
         
-        <div class="form-group">
-            <label for="title">Title (Required)</label>
+    <form method="post" action="{% url 'accounts:post_photo' %}" enctype="multipart/form-data" id="photo-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="title">Title (Required)</label>
             <input type="text" id="title" name="title" required maxlength="90" placeholder="Add a title for your post (max 90 characters)" class="form-control">
             <small class="text-muted">This will be displayed as the title of your TikTok post</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="description">Description</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
             <textarea id="description" name="description" maxlength="4000" placeholder="Add a description for your post (max 4000 characters). You can use #hashtags and @mentions." class="form-control"></textarea>
-        </div>
-        
-        <div class="form-group">
+            </div>
+            
+            <div class="form-group">
             <label>Upload Photos</label>
             <div class="file-upload" id="drop-area">
                 <div class="file-upload-icon">📁</div>
@@ -202,36 +202,36 @@
             <div class="progress-container" id="progress-container">
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
-        </div>
-        
-        <div class="form-group">
-            <label for="privacy_level">Privacy Level</label>
+            </div>
+            
+            <div class="form-group">
+                <label for="privacy_level">Privacy Level</label>
             <select id="privacy_level" name="privacy_level" class="form-control">
-                {% for privacy_level in privacy_levels %}
-                    <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
-                {% empty %}
-                    <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
-                    <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
-                    <option value="SELF_ONLY">Self Only</option>
-                {% endfor %}
-            </select>
-        </div>
-        
-        <div class="checkbox-group">
-            <input type="checkbox" id="disable_comment" name="disable_comment">
-            <label for="disable_comment">Disable comments</label>
-        </div>
-        
-        <div class="checkbox-group">
-            <input type="checkbox" id="auto_add_music" name="auto_add_music" checked>
-            <label for="auto_add_music">Automatically add music to the photo post</label>
-        </div>
-        
+                    {% for privacy_level in privacy_levels %}
+                        <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
+                    {% empty %}
+                        <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
+                        <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
+                        <option value="SELF_ONLY">Self Only</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="disable_comment" name="disable_comment">
+                <label for="disable_comment">Disable comments</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="auto_add_music" name="auto_add_music" checked>
+                <label for="auto_add_music">Automatically add music to the photo post</label>
+            </div>
+            
         <div class="mt-4">
             <a href="{% url 'accounts:dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
             <button type="submit" class="btn btn-primary" id="submit-btn">Post Photos</button>
-        </div>
-    </form>
+            </div>
+        </form>
 </div>
 {% endblock %}
 
@@ -412,5 +412,5 @@
             }, 100);
         });
     });
-</script>
+    </script>
 {% endblock %} 

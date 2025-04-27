@@ -149,130 +149,120 @@
 <div class="container">
     <h1 class="text-center">TikTok Dashboard</h1>
     
-    {% if not tiktok_authenticated %}
-        <div class="card mb-4">
-            <div class="card-body text-center">
-                <h2>Welcome to your TikTok Dashboard</h2>
-                <p>Connect your TikTok account to get started</p>
-                <a href="{% url 'accounts:tiktok_login' %}" class="btn btn-primary">Connect TikTok Account</a>
-            </div>
-        </div>
-    {% else %}
-        <div class="card mb-4">
-            <div class="card-body text-center">
-                {% if profile_picture %}
-                    <img src="{{ profile_picture }}" alt="Profile Picture" class="profile-picture">
-                {% else %}
-                    <div class="profile-picture">
-                        <span>{{ username|first|upper }}</span>
-                    </div>
-                {% endif %}
-                
-                <div class="username">
-                    <span class="tiktok-logo"></span>
-                    {{ username }}
+    <div class="card mb-4">
+        <div class="card-body text-center">
+            {% if profile_picture %}
+                <img src="{{ profile_picture }}" alt="Profile Picture" class="profile-picture">
+            {% else %}
+                <div class="profile-picture">
+                    <span>{{ username|first|upper }}</span>
                 </div>
-                
-                <div class="stats-container">
-                    <div class="stat-item">
-                        <div class="stat-value">{{ followers|default:"0" }}</div>
-                        <div class="stat-label">Followers</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{{ following|default:"0" }}</div>
-                        <div class="stat-label">Following</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{{ likes|default:"0" }}</div>
-                        <div class="stat-label">Likes</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{{ videos|default:"0" }}</div>
-                        <div class="stat-label">Videos</div>
-                    </div>
+            {% endif %}
+            
+            <div class="username">
+                <span class="tiktok-logo"></span>
+                {{ username }}
+            </div>
+            
+            <div class="stats-container">
+                <div class="stat-item">
+                    <div class="stat-value">{{ followers|default:"0" }}</div>
+                    <div class="stat-label">Followers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ following|default:"0" }}</div>
+                    <div class="stat-label">Following</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ likes|default:"0" }}</div>
+                    <div class="stat-label">Likes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ videos|default:"0" }}</div>
+                    <div class="stat-label">Videos</div>
                 </div>
             </div>
         </div>
-        
-        <div class="row mt-4">
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Schedule Video <span class="feature-badge">New</span></h5>
-                        <p class="card-text">Plan and schedule your TikTok videos for optimal posting times.</p>
-                        <a href="{% url 'accounts:schedule_video' %}" class="btn btn-secondary">Schedule Video</a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Post Photos <span class="feature-badge">New</span></h5>
-                        <p class="card-text">Upload and post photos directly to your TikTok account.</p>
-                        <a href="{% url 'accounts:post_photo' %}" class="btn btn-primary">Post Photos</a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Analytics</h5>
-                        <p class="card-text">View detailed analytics about your TikTok performance.</p>
-                        <a href="{% url 'accounts:analytics' %}" class="btn btn-info">View Analytics</a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Scheduled Posts</h5>
-                        <p class="card-text">Manage your upcoming scheduled posts.</p>
-                        <a href="{% url 'accounts:scheduled_posts' %}" class="btn btn-outline-secondary">View Scheduled</a>
-                    </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Schedule Video <span class="feature-badge">New</span></h5>
+                    <p class="card-text">Plan and schedule your TikTok videos for optimal posting times.</p>
+                    <a href="{% url 'accounts:schedule_video' %}" class="btn btn-secondary">Schedule Video</a>
                 </div>
             </div>
         </div>
         
-        {% if recent_videos %}
-            <h3 class="mt-4 mb-3 text-center">Recent Videos</h3>
-            <div class="row">
-                {% for video in recent_videos %}
-                    <div class="col-md-4 mb-4">
-                        <div class="card h-100">
-                            {% if video.thumbnail_url %}
-                                <img src="{{ video.thumbnail_url }}" class="card-img-top video-thumbnail" alt="{{ video.title }}">
-                            {% else %}
-                                <div class="card-img-top video-thumbnail bg-light d-flex align-items-center justify-content-center">
-                                    <i class="bi bi-film text-muted" style="font-size: 2rem;"></i>
-                                </div>
-                            {% endif %}
-                            <div class="card-body">
-                                <h5 class="card-title video-title">{{ video.title }}</h5>
-                                <p class="card-text video-description">{{ video.description|truncatechars:60 }}</p>
-                                <p class="text-muted">
-                                    <small>{{ video.created_at|date:"M d, Y" }}</small>
-                                    {% if video.duration %}
-                                        <span class="ms-2 video-duration">
-                                            <i class="bi bi-clock"></i> {{ video.duration }}
-                                        </span>
-                                    {% endif %}
-                                </p>
-                                {% if video.video_url %}
-                                    <a href="{{ video.video_url }}" target="_blank" class="video-link">View on TikTok</a>
-                                {% endif %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Post Photos <span class="feature-badge">New</span></h5>
+                    <p class="card-text">Upload and post photos directly to your TikTok account.</p>
+                    <a href="{% url 'accounts:post_photo' %}" class="btn btn-primary">Post Photos</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Analytics</h5>
+                    <p class="card-text">View detailed analytics about your TikTok performance.</p>
+                    <a href="{% url 'accounts:analytics' %}" class="btn btn-info">View Analytics</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Scheduled Posts</h5>
+                    <p class="card-text">Manage your upcoming scheduled posts.</p>
+                    <a href="{% url 'accounts:scheduled_posts' %}" class="btn btn-outline-secondary">View Scheduled</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if recent_videos %}
+        <h3 class="mt-4 mb-3 text-center">Recent Videos</h3>
+        <div class="row">
+            {% for video in recent_videos %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        {% if video.thumbnail_url %}
+                            <img src="{{ video.thumbnail_url }}" class="card-img-top video-thumbnail" alt="{{ video.title }}">
+                        {% else %}
+                            <div class="card-img-top video-thumbnail bg-light d-flex align-items-center justify-content-center">
+                                <i class="bi bi-film text-muted" style="font-size: 2rem;"></i>
                             </div>
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title video-title">{{ video.title }}</h5>
+                            <p class="card-text video-description">{{ video.description|truncatechars:60 }}</p>
+                            <p class="text-muted">
+                                <small>{{ video.created_at|date:"M d, Y" }}</small>
+                                {% if video.duration %}
+                                    <span class="ms-2 video-duration">
+                                        <i class="bi bi-clock"></i> {{ video.duration }}
+                                    </span>
+                                {% endif %}
+                            </p>
+                            {% if video.video_url %}
+                                <a href="{{ video.video_url }}" target="_blank" class="video-link">View on TikTok</a>
+                            {% endif %}
                         </div>
                     </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="alert alert-info text-center">
-                <p class="no-videos">You don't have any recent videos.</p>
-            </div>
-        {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center">
+            <p class="no-videos">You don't have any recent videos.</p>
+        </div>
     {% endif %}
 </div>
 {% endblock %}
