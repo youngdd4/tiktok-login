@@ -1,0 +1,343 @@
+<!-- schedule_video.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Video Post</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f8f8;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="text"], input[type="datetime-local"], textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .button {
+            background-color: #FF0050;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-block;
+            text-align: center;
+            text-decoration: none;
+        }
+        .button:hover {
+            background-color: #D90042;
+        }
+        .button-secondary {
+            background-color: #eee;
+            color: #333;
+            margin-right: 10px;
+        }
+        .button-secondary:hover {
+            background-color: #ddd;
+        }
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .info-box {
+            background-color: #f0f9ff;
+            border: 1px solid #c0e0ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .success-message {
+            background-color: #e6f7e6;
+            border: 1px solid #c0e0c0;
+            color: #2c662d;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .error-message {
+            background-color: #ffebeb;
+            border: 1px solid #ffbdbd;
+            color: #c62828;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .requirements {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffb300;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .nav-tabs {
+            display: flex;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #ddd;
+        }
+        .nav-tab {
+            padding: 10px 20px;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+            cursor: pointer;
+            color: #666;
+        }
+        .nav-tab.active, .nav-tab:hover {
+            border-color: #ddd;
+            background-color: white;
+            color: #333;
+        }
+        .hashtag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .hashtag {
+            background-color: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+        }
+        .hashtag span {
+            margin-right: 5px;
+        }
+        .remove-hashtag {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .add-hashtag-btn {
+            background-color: #eee;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Schedule TikTok Video</h1>
+        
+        <div class="nav-tabs">
+            <a href="{% url 'accounts:dashboard' %}" class="nav-tab">Dashboard</a>
+            <a href="{% url 'accounts:schedule_video' %}" class="nav-tab active">Schedule Video</a>
+            <a href="{% url 'accounts:post_photo' %}" class="nav-tab">Post Photos</a>
+            <a href="{% url 'accounts:scheduled_posts' %}" class="nav-tab">Scheduled Posts</a>
+        </div>
+        
+        {% if success %}
+        <div class="success-message">
+            {{ success }}
+        </div>
+        {% endif %}
+        
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <div class="info-box">
+            <p><strong>Video Scheduling:</strong> Create and schedule videos to be posted to your TikTok account at specific times.</p>
+            <div class="requirements">
+                <p><strong>Video Requirements:</strong></p>
+                <ul>
+                    <li>Supported formats: MP4 (recommended), WebM, MOV</li>
+                    <li>Supported codecs: H.264 (recommended), H.265, VP8, VP9</li>
+                    <li>Minimum framerate: 23 FPS, Maximum: 60 FPS</li>
+                    <li>Minimum resolution: 360px, Maximum: 4096px</li>
+                    <li>Maximum duration: {% if max_video_duration %}{{ max_video_duration }} seconds{% else %}180 seconds{% endif %}</li>
+                    <li>Maximum file size: 4GB</li>
+                    <li>Video must be hosted on a publicly accessible URL</li>
+                </ul>
+            </div>
+        </div>
+        
+        <form method="post" action="{% url 'accounts:schedule_video' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="title">Title (Required)</label>
+                <input type="text" id="title" name="title" required maxlength="2200" placeholder="Add a title for your post (max 2200 characters)">
+                <small>This will be displayed as the caption of your TikTok post. You can use #hashtags and @mentions.</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" placeholder="Add additional description for your post (optional)"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="video_url">Video URL (Required)</label>
+                <input type="text" id="video_url" name="video_url" required placeholder="Enter the URL of your video">
+                <small>Must be a publicly accessible URL to a video file in a supported format</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="hashtags">Hashtags</label>
+                <input type="text" id="hashtag_input" placeholder="Enter a hashtag (without #) and press Enter">
+                <div class="hashtag-container" id="hashtag-container"></div>
+                <input type="hidden" id="hashtags" name="hashtags" value="">
+                <small>Add hashtags to increase your video's visibility</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="scheduled_time">Schedule Time (Required)</label>
+                <input type="datetime-local" id="scheduled_time" name="scheduled_time" required>
+                <small>Select when you want this video to be posted</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="privacy_level">Privacy Level</label>
+                <select id="privacy_level" name="privacy_level">
+                    {% for privacy_level in privacy_levels %}
+                        <option value="{{ privacy_level }}">{{ privacy_level|replace:"_":" "|title }}</option>
+                    {% empty %}
+                        <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
+                        <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
+                        <option value="SELF_ONLY">Self Only</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="disable_comment" name="disable_comment" {% if comment_disabled %}checked{% endif %}>
+                <label for="disable_comment">Disable comments</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="disable_duet" name="disable_duet" {% if duet_disabled %}checked{% endif %}>
+                <label for="disable_duet">Disable duets</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="disable_stitch" name="disable_stitch" {% if stitch_disabled %}checked{% endif %}>
+                <label for="disable_stitch">Disable stitches</label>
+            </div>
+            
+            <div class="button-container">
+                <a href="{% url 'accounts:dashboard' %}" class="button button-secondary">Back to Dashboard</a>
+                <button type="submit" class="button">Schedule Post</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // Set minimum datetime for scheduling to current time
+        const scheduledTimeInput = document.getElementById('scheduled_time');
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 5); // Add 5 minutes buffer
+        
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        
+        const minDateTime = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        scheduledTimeInput.setAttribute('min', minDateTime);
+        scheduledTimeInput.value = minDateTime;
+        
+        // Hashtag functionality
+        const hashtagInput = document.getElementById('hashtag_input');
+        const hashtagContainer = document.getElementById('hashtag-container');
+        const hashtagsHidden = document.getElementById('hashtags');
+        let hashtags = [];
+        
+        function updateHashtagsField() {
+            hashtagsHidden.value = hashtags.join(',');
+        }
+        
+        function addHashtag(tag) {
+            if (!tag || hashtags.includes(tag)) return;
+            
+            hashtags.push(tag);
+            updateHashtagsField();
+            
+            const hashtagElement = document.createElement('div');
+            hashtagElement.className = 'hashtag';
+            hashtagElement.innerHTML = `
+                <span>#${tag}</span>
+                <button type="button" class="remove-hashtag" data-tag="${tag}">&times;</button>
+            `;
+            hashtagContainer.appendChild(hashtagElement);
+            
+            // Add remove event listener
+            const removeButton = hashtagElement.querySelector('.remove-hashtag');
+            removeButton.addEventListener('click', function() {
+                const tagToRemove = this.getAttribute('data-tag');
+                removeHashtag(tagToRemove);
+                hashtagElement.remove();
+            });
+        }
+        
+        function removeHashtag(tag) {
+            hashtags = hashtags.filter(t => t !== tag);
+            updateHashtagsField();
+        }
+        
+        hashtagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const tag = this.value.trim().replace(/^#/, '');
+                if (tag) {
+                    addHashtag(tag);
+                    this.value = '';
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

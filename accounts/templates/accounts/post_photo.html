@@ -1,0 +1,262 @@
+<!-- post_photo.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Photos to TikTok</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f8f8;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .button {
+            background-color: #25F4EE;
+            color: black;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-block;
+            text-align: center;
+            text-decoration: none;
+        }
+        .button:hover {
+            background-color: #20d5ec;
+        }
+        .button-secondary {
+            background-color: #eee;
+            color: #333;
+            margin-right: 10px;
+        }
+        .button-secondary:hover {
+            background-color: #ddd;
+        }
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .info-box {
+            background-color: #f0f9ff;
+            border: 1px solid #c0e0ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .success-message {
+            background-color: #e6f7e6;
+            border: 1px solid #c0e0c0;
+            color: #2c662d;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .error-message {
+            background-color: #ffebeb;
+            border: 1px solid #ffbdbd;
+            color: #c62828;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .status-box {
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 30px;
+            display: none;
+        }
+        .requirements {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffb300;
+            padding: 12px 15px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Post Photos to TikTok</h1>
+        
+        {% if success %}
+        <div class="success-message">
+            {{ success }}
+            {% if publish_id %}
+            <div class="status-box" id="status-box" style="display: block;">
+                <p><strong>Publish ID:</strong> {{ publish_id }}</p>
+                <p><strong>Status:</strong> <span id="status-text">Checking...</span></p>
+                <p id="status-details"></p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <div class="info-box">
+            <p><strong>New Feature:</strong> You can now post photos directly to TikTok through our app!</p>
+            <div class="requirements">
+                <p><strong>Photo Requirements:</strong></p>
+                <ul>
+                    <li>Supported formats: WebP, JPEG</li>
+                    <li>Maximum resolution: 1080p</li>
+                    <li>Maximum size: 20MB per image</li>
+                    <li>You can upload up to 35 photos in a single post</li>
+                    <li>Photos must be hosted on a publicly accessible URL</li>
+                </ul>
+            </div>
+        </div>
+        
+        <form method="post" action="{% url 'accounts:post_photo' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="title">Title (Required)</label>
+                <input type="text" id="title" name="title" required maxlength="90" placeholder="Add a title for your post (max 90 characters)">
+                <small>This will be displayed as the title of your TikTok post</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" maxlength="4000" placeholder="Add a description for your post (max 4000 characters). You can use #hashtags and @mentions."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="photo_urls">Photo URLs (Required)</label>
+                <textarea id="photo_urls" name="photo_urls" required placeholder="Enter one photo URL per line. You can add up to 35 photos."></textarea>
+                <small>Each line should contain a single URL to a publicly accessible photo</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="privacy_level">Privacy Level</label>
+                <select id="privacy_level" name="privacy_level">
+                    {% for privacy_level in privacy_levels %}
+                        <option value="{{ privacy_level }}">{{ privacy_level|title|replace:"_":" " }}</option>
+                    {% empty %}
+                        <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
+                        <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
+                        <option value="SELF_ONLY">Self Only</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="disable_comment" name="disable_comment">
+                <label for="disable_comment">Disable comments</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="auto_add_music" name="auto_add_music" checked>
+                <label for="auto_add_music">Automatically add music to the photo post</label>
+            </div>
+            
+            <div class="button-container">
+                <a href="{% url 'accounts:dashboard' %}" class="button button-secondary">Back to Dashboard</a>
+                <button type="submit" class="button">Post Photos</button>
+            </div>
+        </form>
+        
+        <div class="status-box" id="status-box">
+            <p><strong>Publish Status:</strong> <span id="status-text"></span></p>
+            <p id="status-details"></p>
+        </div>
+    </div>
+    
+    {% if publish_id %}
+    <script>
+        // Function to check the status of a post
+        function checkStatus() {
+            fetch('/accounts/post/status/{{ publish_id }}/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const statusElement = document.getElementById('status-text');
+                        const detailsElement = document.getElementById('status-details');
+                        
+                        statusElement.innerText = data.status || 'Unknown';
+                        
+                        if (data.status === 'PROCESSING_UPLOAD' || data.status === 'PROCESSING_DOWNLOAD') {
+                            detailsElement.innerText = 'Your photos are being processed. This may take a few moments.';
+                            // Continue polling
+                            setTimeout(checkStatus, 5000);
+                        } else if (data.status === 'PUBLISH_COMPLETE') {
+                            detailsElement.innerText = 'Your photos have been successfully posted to TikTok!';
+                            document.getElementById('status-box').style.backgroundColor = '#e6f7e6';
+                        } else if (data.status === 'FAILED') {
+                            detailsElement.innerText = `Publishing failed. Reason: ${data.error.message || 'Unknown error'}`;
+                            document.getElementById('status-box').style.backgroundColor = '#ffebeb';
+                        } else {
+                            // For other statuses, just display and poll again
+                            setTimeout(checkStatus, 5000);
+                        }
+                    } else {
+                        document.getElementById('status-text').innerText = 'Error checking status';
+                        document.getElementById('status-details').innerText = data.error || 'Unknown error occurred';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status:', error);
+                    document.getElementById('status-text').innerText = 'Error';
+                    document.getElementById('status-details').innerText = 'Could not connect to server to check status';
+                });
+        }
+        
+        // Show the status box and start checking status
+        document.getElementById('status-box').style.display = 'block';
+        checkStatus();
+    </script>
+    {% endif %}
+</body>
+</html> 

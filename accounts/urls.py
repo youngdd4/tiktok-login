@@ -11,4 +11,20 @@ urlpatterns = [
     path('login/tiktok/callback/', views.tiktok_callback, name='tiktok_callback'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('logout/', views.logout_view, name='logout'),
+    path('post/photo/', views.post_photo_view, name='post_photo'),
+    path('post/status/<str:publish_id>/', views.check_post_status, name='check_post_status'),
+    
+    # New Video Scheduling Routes
+    path('post/video/', views.schedule_video_view, name='schedule_video'),
+    path('scheduled/', views.scheduled_posts_view, name='scheduled_posts'),
+    path('scheduled/<int:post_id>/edit/', views.edit_scheduled_post, name='edit_scheduled_post'),
+    path('scheduled/<int:post_id>/delete/', views.delete_scheduled_post, name='delete_scheduled_post'),
+    
+    # Analytics
+    path('analytics/', views.analytics_view, name='analytics'),
+    
+    # Notifications
+    path('notifications/', views.notifications_view, name='notifications'),
+    path('notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    path('notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
 ]

@@ -1,0 +1,377 @@
+<!-- scheduled_posts.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduled Posts</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f8f8;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .nav-tabs {
+            display: flex;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #ddd;
+        }
+        .nav-tab {
+            padding: 10px 20px;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #666;
+        }
+        .nav-tab.active, .nav-tab:hover {
+            border-color: #ddd;
+            background-color: white;
+            color: #333;
+        }
+        .button {
+            background-color: #FF0050;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-block;
+            text-align: center;
+            text-decoration: none;
+        }
+        .button:hover {
+            background-color: #D90042;
+        }
+        .button-secondary {
+            background-color: #eee;
+            color: #333;
+        }
+        .button-secondary:hover {
+            background-color: #ddd;
+        }
+        .button-green {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .button-green:hover {
+            background-color: #45a049;
+        }
+        .button-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 0;
+            color: #666;
+        }
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+        .scheduled-posts {
+            margin-top: 20px;
+        }
+        .post-card {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .post-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        .post-date {
+            color: #666;
+            font-size: 14px;
+        }
+        .post-content {
+            margin-bottom: 15px;
+        }
+        .post-description {
+            margin-bottom: 10px;
+            color: #555;
+        }
+        .post-media {
+            margin-bottom: 10px;
+        }
+        .post-media img, .post-media video {
+            max-width: 100%;
+            border-radius: 4px;
+            max-height: 200px;
+            object-fit: cover;
+        }
+        .post-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .status-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-scheduled {
+            background-color: #E3F2FD;
+            color: #1976D2;
+        }
+        .status-processing {
+            background-color: #FFF8E1;
+            color: #FFA000;
+        }
+        .status-published {
+            background-color: #E8F5E9;
+            color: #388E3C;
+        }
+        .status-failed {
+            background-color: #FFEBEE;
+            color: #D32F2F;
+        }
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .filter-button {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+        }
+        .filter-button.active {
+            background-color: #FF0050;
+            color: white;
+            border-color: #FF0050;
+        }
+        .post-meta {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .post-meta-item {
+            background-color: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #666;
+        }
+        .hashtags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .hashtag {
+            background-color: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #666;
+            font-size: 13px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .pagination a {
+            padding: 8px 12px;
+            margin: 0 5px;
+            border: 1px solid #ddd;
+            background-color: white;
+            color: #333;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .pagination a.active {
+            background-color: #FF0050;
+            color: white;
+            border-color: #FF0050;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Scheduled Posts</h1>
+        
+        <div class="nav-tabs">
+            <a href="{% url 'accounts:dashboard' %}" class="nav-tab">Dashboard</a>
+            <a href="{% url 'accounts:schedule_video' %}" class="nav-tab">Schedule Video</a>
+            <a href="{% url 'accounts:post_photo' %}" class="nav-tab">Post Photos</a>
+            <a href="{% url 'accounts:scheduled_posts' %}" class="nav-tab active">Scheduled Posts</a>
+        </div>
+        
+        <div class="filters">
+            <button class="filter-button active" data-filter="all">All</button>
+            <button class="filter-button" data-filter="scheduled">Scheduled</button>
+            <button class="filter-button" data-filter="processing">Processing</button>
+            <button class="filter-button" data-filter="published">Published</button>
+            <button class="filter-button" data-filter="failed">Failed</button>
+        </div>
+        
+        <div class="scheduled-posts">
+            {% if posts %}
+                {% for post in posts %}
+                    <div class="post-card post-status-{{ post.status }}">
+                        <div class="status-badge status-{{ post.status }}">
+                            {{ post.get_status_display }}
+                        </div>
+                        
+                        <div class="post-header">
+                            <div>
+                                <div class="post-title">{{ post.title }}</div>
+                                <div class="post-date">
+                                    Scheduled for: {{ post.scheduled_time|date:"F j, Y, g:i a" }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="post-content">
+                            {% if post.description %}
+                                <div class="post-description">{{ post.description }}</div>
+                            {% endif %}
+                            
+                            <div class="post-media">
+                                {% if post.media_type == 'video' %}
+                                    {% if post.thumbnail_url %}
+                                        <img src="{{ post.thumbnail_url }}" alt="Video thumbnail">
+                                    {% else %}
+                                        <div style="background-color: #f0f0f0; height: 150px; display: flex; align-items: center; justify-content: center;">
+                                            <span>Video: {{ post.media_url }}</span>
+                                        </div>
+                                    {% endif %}
+                                {% elif post.media_type == 'photo' %}
+                                    {% if ',' in post.media_url %}
+                                        <div>Multiple photos</div>
+                                    {% else %}
+                                        <img src="{{ post.media_url }}" alt="Photo">
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            
+                            {% if post.hashtags %}
+                                <div class="hashtags">
+                                    {% for hashtag in post.hashtags.split ',' %}
+                                        <div class="hashtag">#{{ hashtag }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="post-meta">
+                                <div class="post-meta-item">{{ post.get_media_type_display }}</div>
+                                <div class="post-meta-item">{{ post.privacy_level|replace:"_":" "|title }}</div>
+                                {% if post.disable_comment %}
+                                    <div class="post-meta-item">Comments Disabled</div>
+                                {% endif %}
+                                {% if post.disable_duet %}
+                                    <div class="post-meta-item">Duets Disabled</div>
+                                {% endif %}
+                                {% if post.disable_stitch %}
+                                    <div class="post-meta-item">Stitches Disabled</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="post-actions">
+                            {% if post.is_scheduled %}
+                                <a href="{% url 'accounts:edit_scheduled_post' post.id %}" class="button button-secondary button-sm">Edit</a>
+                                <a href="{% url 'accounts:delete_scheduled_post' post.id %}" class="button button-sm">Delete</a>
+                            {% elif post.is_published %}
+                                <a href="{{ post.tiktok_post_url }}" target="_blank" class="button button-green button-sm">View on TikTok</a>
+                            {% elif post.is_failed %}
+                                <div class="error-message">
+                                    {{ post.error_message }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+                
+                {% if posts.has_other_pages %}
+                    <div class="pagination">
+                        {% if posts.has_previous %}
+                            <a href="?page={{ posts.previous_page_number }}">&laquo; Previous</a>
+                        {% endif %}
+                        
+                        {% for i in posts.paginator.page_range %}
+                            {% if posts.number == i %}
+                                <a class="active">{{ i }}</a>
+                            {% else %}
+                                <a href="?page={{ i }}">{{ i }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if posts.has_next %}
+                            <a href="?page={{ posts.next_page_number }}">Next &raquo;</a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <p>You don't have any scheduled posts yet.</p>
+                    <a href="{% url 'accounts:schedule_video' %}" class="button">Schedule a Video</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        // Filtering functionality
+        const filterButtons = document.querySelectorAll('.filter-button');
+        const postCards = document.querySelectorAll('.post-card');
+        
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Update active state
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                const filter = this.getAttribute('data-filter');
+                
+                postCards.forEach(card => {
+                    if (filter === 'all') {
+                        card.style.display = 'block';
+                    } else {
+                        if (card.classList.contains(`post-status-${filter}`)) {
+                            card.style.display = 'block';
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html> 

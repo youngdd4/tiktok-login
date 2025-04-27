@@ -1,0 +1,109 @@
+<!-- analytics.html -->
+{% extends "base.html" %}
+
+{% block title %}TikTok Analytics{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">TikTok Analytics</h1>
+    
+    {% if not tiktok_authenticated %}
+        <div class="alert alert-warning">
+            You need to authenticate with TikTok first. Please go to your <a href="{% url 'accounts:settings' %}">account settings</a> to connect your TikTok account.
+        </div>
+    {% else %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    {% if profile_picture %}
+                        <img src="{{ profile_picture }}" alt="Profile Picture" class="rounded-circle me-3" style="width: 60px; height: 60px;">
+                    {% endif %}
+                    <div>
+                        <h3 class="mb-1">{{ username }}</h3>
+                        <p class="text-muted mb-0">TikTok Creator</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Views</h5>
+                        <h2 class="mb-0">{{ total_views|default:"0" }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Likes</h5>
+                        <h2 class="mb-0">{{ total_likes|default:"0" }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Comments</h5>
+                        <h2 class="mb-0">{{ total_comments|default:"0" }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Shares</h5>
+                        <h2 class="mb-0">{{ total_shares|default:"0" }}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Engagement Rate</h5>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ engagement_rate }}%;" aria-valuenow="{{ engagement_rate }}" aria-valuemin="0" aria-valuemax="100">{{ engagement_rate }}%</div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="mb-3">Published Posts</h3>
+        
+        {% if published_posts %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Date Published</th>
+                            <th>Views</th>
+                            <th>Likes</th>
+                            <th>Comments</th>
+                            <th>Shares</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for post in published_posts %}
+                            <tr>
+                                <td>{{ post.title }}</td>
+                                <td>{{ post.published_at|date:"M d, Y" }}</td>
+                                <td>{{ post.analytics.views|default:"0" }}</td>
+                                <td>{{ post.analytics.likes|default:"0" }}</td>
+                                <td>{{ post.analytics.comments|default:"0" }}</td>
+                                <td>{{ post.analytics.shares|default:"0" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                You don't have any published posts yet. Once you publish content, analytics will appear here.
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %} 
