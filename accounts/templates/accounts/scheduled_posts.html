@@ -1,4 +1,5 @@
 <!-- scheduled_posts.html -->
+{% load app_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -296,7 +297,7 @@
                             
                             {% if post.hashtags %}
                                 <div class="hashtags">
-                                    {% for hashtag in post.hashtags.split ',' %}
+                                    {% for hashtag in post.hashtags|split:"," %}
                                         <div class="hashtag">#{{ hashtag }}</div>
                                     {% endfor %}
                                 </div>
@@ -304,7 +305,7 @@
                             
                             <div class="post-meta">
                                 <div class="post-meta-item">{{ post.get_media_type_display }}</div>
-                                <div class="post-meta-item">{{ post.privacy_level|replace:"_":" "|title }}</div>
+                                <div class="post-meta-item">{{ post.privacy_level|cut:"_"|title }}</div>
                                 {% if post.disable_comment %}
                                     <div class="post-meta-item">Comments Disabled</div>
                                 {% endif %}

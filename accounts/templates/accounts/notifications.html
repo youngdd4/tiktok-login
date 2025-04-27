@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Notifications</h1>
+    
+    {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+    {% endif %}
+    
+    <div class="card">
+        <div class="card-body">
+            {% if notifications %}
+                <div class="d-flex justify-content-between mb-3">
+                    <h5 class="card-title mb-0">Recent Notifications</h5>
+                    <a href="{% url 'accounts:mark_all_notifications_read' %}" class="btn btn-sm btn-outline-secondary">Mark All as Read</a>
+                </div>
+                
+                <div class="list-group">
+                    {% for notification in notifications %}
+                        <div class="list-group-item list-group-item-action {% if not notification.read %}list-group-item-light{% endif %}">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    {% if notification.type == 'success' %}
+                                        <span class="badge bg-success">Success</span>
+                                    {% elif notification.type == 'error' %}
+                                        <span class="badge bg-danger">Error</span>
+                                    {% else %}
+                                        <span class="badge bg-info">Info</span>
+                                    {% endif %}
+                                    {% if not notification.read %}
+                                        <span class="badge bg-secondary">New</span>
+                                    {% endif %}
+                                </h6>
+                                <small>{{ notification.created_at|date:"F j, Y, g:i a" }}</small>
+                            </div>
+                            <p class="mb-1">{{ notification.message }}</p>
+                            {% if notification.post %}
+                                <small>
+                                    Post: <a href="{% url 'accounts:scheduled_posts' %}">{{ notification.post.title }}</a>
+                                </small>
+                            {% endif %}
+                            {% if not notification.read %}
+                                <div class="mt-2 text-end">
+                                    <a href="{% url 'accounts:mark_notification_read' notification.id %}" class="btn btn-sm btn-outline-secondary">Mark as Read</a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                {% if notifications.has_other_pages %}
+                    <nav aria-label="Notification pagination" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if notifications.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ notifications.previous_page_number }}" aria-label="Previous">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for i in notifications.paginator.page_range %}
+                                {% if notifications.number == i %}
+                                    <li class="page-item active"><a class="page-link" href="#">{{ i }}</a></li>
+                                {% else %}
+                                    <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if notifications.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ notifications.next_page_number }}" aria-label="Next">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">You don't have any notifications yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{% url 'accounts:dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %} 

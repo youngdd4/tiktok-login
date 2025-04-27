@@ -243,7 +243,7 @@
                 <label for="privacy_level">Privacy Level</label>
                 <select id="privacy_level" name="privacy_level">
                     {% for privacy_level in privacy_levels %}
-                        <option value="{{ privacy_level }}">{{ privacy_level|replace:"_":" "|title }}</option>
+                        <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
                     {% empty %}
                         <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
                         <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
