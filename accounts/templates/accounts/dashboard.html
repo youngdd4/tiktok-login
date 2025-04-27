@@ -1,501 +1,267 @@
-<!-- dashboard.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Dashboard</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f8f8f8;
-            margin: 0;
-            padding: 20px;
-        }
-        .dashboard-container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-        }
-        .profile-picture {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #f0f0f0;
-            color: #666;
-            font-size: 40px;
-        }
-        .username {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 30px;
-            color: #333;
-        }
-        .tiktok-logo {
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 5px;
-            width: 24px;
-            height: 24px;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/></svg>');
-            background-repeat: no-repeat;
-            background-position: center;
-        }
-        .button {
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            margin-top: 20px;
-            display: inline-block;
-        }
-        .logout-button {
-            background-color: #ff0050;
-        }
-        .logout-button:hover {
-            background-color: #d90042;
-        }
-        .photo-button {
-            background-color: #25F4EE;
-        }
-        .photo-button:hover {
-            background-color: #20d5ec;
-        }
-        .video-button {
-            background-color: #FF0050;
-        }
-        .video-button:hover {
-            background-color: #D90042;
-        }
-        .analytics-button {
-            background-color: #00B6F0;
-        }
-        .analytics-button:hover {
-            background-color: #0095c9;
-        }
-        .button-container {
-            margin-top: 20px;
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .feature-badge {
-            display: inline-block;
-            background-color: #25F4EE;
-            color: #000;
-            font-size: 12px;
-            font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 12px;
-            margin-left: 5px;
-            vertical-align: middle;
-        }
-        h1, h2 {
-            color: #333;
-            margin-bottom: 30px;
-        }
-        .user-info {
-            margin-bottom: 30px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 8px;
-        }
-        .videos-container {
-            margin-top: 40px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            justify-content: center;
-        }
-        .video-card {
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-            background-color: white;
-        }
-        .video-card:hover {
-            transform: translateY(-5px);
-        }
-        .video-thumbnail {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            display: block;
-        }
-        .video-info {
-            padding: 15px;
-            text-align: left;
-        }
-        .video-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #333;
-            font-size: 16px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .video-description {
-            color: #666;
-            font-size: 14px;
-            height: 40px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-        .video-duration {
-            font-size: 12px;
-            color: #999;
-            display: flex;
-            align-items: center;
-        }
-        .duration-icon {
-            width: 12px;
-            height: 12px;
-            margin-right: 5px;
-            display: inline-block;
-        }
-        .video-link {
-            display: block;
-            margin-top: 10px;
-            text-decoration: none;
-            color: #ff0050;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .no-videos {
-            margin-top: 30px;
-            color: #666;
-            font-style: italic;
-        }
-        .stat-item {
-            text-align: center;
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #f0f0f0;
-            min-width: 70px;
-        }
-        .stat-value {
-            font-weight: bold;
-            font-size: 18px;
-            color: #ff0050;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 40px;
-        }
-        @media (max-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        .dashboard-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            text-align: left;
-        }
-        .dashboard-card h3 {
-            color: #333;
-            margin-top: 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .view-all {
-            font-size: 14px;
-            color: #00B6F0;
-            text-decoration: none;
-        }
-        .view-all:hover {
-            text-decoration: underline;
-        }
-        .scheduled-post {
-            border-bottom: 1px solid #eee;
-            padding: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .scheduled-post:last-child {
-            border-bottom: none;
-        }
-        .post-left {
-            flex: 1;
-        }
-        .post-right {
-            flex: 0 0 auto;
-        }
-        .post-title-small {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .post-time {
-            font-size: 13px;
-            color: #666;
-        }
-        .status-badge-sm {
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-        }
-        .notification-list {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-        }
-        .notification-item {
-            padding: 10px 0;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            align-items: center;
-        }
-        .notification-item:last-child {
-            border-bottom: none;
-        }
-        .notification-icon {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            margin-right: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .icon-success {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .icon-error {
-            background-color: #F44336;
-            color: white;
-        }
-        .icon-info {
-            background-color: #2196F3;
-            color: white;
-        }
-        .notification-content {
-            flex: 1;
-            font-size: 14px;
-        }
-        .notification-time {
-            color: #999;
-            font-size: 12px;
-            display: block;
-            margin-top: 5px;
-        }
-        .empty-list {
-            text-align: center;
-            padding: 20px 0;
-            color: #999;
-        }
-        .nav-tabs {
-            display: flex;
-            margin-bottom: 25px;
-            border-bottom: 1px solid #ddd;
-        }
-        .nav-tab {
-            padding: 10px 20px;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
-            margin-right: 5px;
-            cursor: pointer;
-            color: #666;
-            text-decoration: none;
-        }
-        .nav-tab.active, .nav-tab:hover {
-            border-color: #ddd;
-            background-color: white;
-            color: #333;
-        }
-    </style>
-</head>
-<body>
-    <div class="dashboard-container">
-        <h1>Welcome to Your Dashboard</h1>
-        
-        <div class="nav-tabs">
-            <a href="{% url 'accounts:dashboard' %}" class="nav-tab active">Dashboard</a>
-            <a href="{% url 'accounts:schedule_video' %}" class="nav-tab">Schedule Video</a>
-            <a href="{% url 'accounts:post_photo' %}" class="nav-tab">Post Photos</a>
-            <a href="{% url 'accounts:scheduled_posts' %}" class="nav-tab">Scheduled Posts</a>
-            <a href="{% url 'accounts:analytics' %}" class="nav-tab">Analytics</a>
-        </div>
-        
-        <div class="user-info">
-            {% if profile_picture %}
-                <img src="{{ profile_picture }}" alt="Profile Picture" class="profile-picture">
-            {% else %}
-                <div class="profile-picture">
-                    <span>{{ username.0 }}</span>
-                </div>
-            {% endif %}
-            
-            <div class="username">
-                <span class="tiktok-logo"></span>
-                {{ username }}
-                {% if is_verified %}
-                <span title="Verified Account" style="color: #20D5EC; margin-left: 5px;">✓</span>
-                {% endif %}
-            </div>
-            
-            {% if tiktok_handle %}
-            <div style="margin-bottom: 15px; color: #666;">
-                @{{ tiktok_handle }}
-            </div>
-            {% endif %}
-            
-            {% if bio %}
-            <div style="margin-bottom: 20px; font-style: italic; padding: 10px; background-color: #f0f0f0; border-radius: 5px;">
-                "{{ bio }}"
-            </div>
-            {% endif %}
-            
-            <div class="stats-container" style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px;">
-                <div class="stat-item">
-                    <div class="stat-value">{{ follower_count|stringformat:"d"|slice:"-15:" }}</div>
-                    <div class="stat-label">Followers</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ following_count|stringformat:"d"|slice:"-15:" }}</div>
-                    <div class="stat-label">Following</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ likes_count|stringformat:"d"|slice:"-15:" }}</div>
-                    <div class="stat-label">Likes</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ video_count|stringformat:"d"|slice:"-15:" }}</div>
-                    <div class="stat-label">Videos</div>
-                </div>
-            </div>
-            
-            <p>You've successfully logged in with your TikTok account!</p>
-            
-            <div class="button-container">
-                {% if profile_deep_link %}
-                <a href="{{ profile_deep_link }}" target="_blank" class="button" style="background-color: #000;">
-                    Visit TikTok Profile
-                </a>
-                {% endif %}
-                
-                <a href="{% url 'accounts:schedule_video' %}" class="button video-button">
-                    Schedule Video <span class="feature-badge">NEW</span>
-                </a>
-                
-                <a href="{% url 'accounts:post_photo' %}" class="button photo-button">
-                    Post Photos <span class="feature-badge">NEW</span>
-                </a>
-                
-                <a href="{% url 'accounts:analytics' %}" class="button analytics-button">
-                    Analytics <span class="feature-badge">NEW</span>
-                </a>
+{% extends "base.html" %}
+
+{% block title %}TikTok Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-picture {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f0f0f0;
+        color: #666;
+        font-size: 40px;
+    }
+    .username {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 30px;
+        color: #333;
+    }
+    .tiktok-logo {
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 5px;
+        width: 24px;
+        height: 24px;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/></svg>');
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+    .feature-badge {
+        display: inline-block;
+        background-color: #25F4EE;
+        color: #000;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 3px 8px;
+        border-radius: 12px;
+        margin-left: 5px;
+        vertical-align: middle;
+    }
+    .user-info {
+        margin-bottom: 30px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+    }
+    .videos-container {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        justify-content: center;
+    }
+    .video-card {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease;
+        background-color: white;
+    }
+    .video-card:hover {
+        transform: translateY(-5px);
+    }
+    .video-thumbnail {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        display: block;
+    }
+    .video-info {
+        padding: 15px;
+        text-align: left;
+    }
+    .video-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #333;
+        font-size: 16px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .video-description {
+        color: #666;
+        font-size: 14px;
+        height: 40px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    .video-duration {
+        font-size: 12px;
+        color: #999;
+        display: flex;
+        align-items: center;
+    }
+    .duration-icon {
+        width: 12px;
+        height: 12px;
+        margin-right: 5px;
+        display: inline-block;
+    }
+    .video-link {
+        display: block;
+        margin-top: 10px;
+        text-decoration: none;
+        color: #ff0050;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    .no-videos {
+        margin-top: 30px;
+        color: #666;
+        font-style: italic;
+    }
+    .stat-item {
+        text-align: center;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f0f0f0;
+        min-width: 70px;
+    }
+    .stat-value {
+        font-weight: bold;
+        font-size: 18px;
+        color: #ff0050;
+    }
+    .stat-label {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .stats-container {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center">TikTok Dashboard</h1>
+    
+    {% if not tiktok_authenticated %}
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h2>Welcome to your TikTok Dashboard</h2>
+                <p>Connect your TikTok account to get started</p>
+                <a href="{% url 'accounts:tiktok_login' %}" class="btn btn-primary">Connect TikTok Account</a>
             </div>
         </div>
-        
-        <div class="dashboard-grid">
-            <!-- Upcoming Posts -->
-            <div class="dashboard-card">
-                <h3>
-                    Upcoming Posts
-                    <a href="{% url 'accounts:scheduled_posts' %}" class="view-all">View All</a>
-                </h3>
-                {% if scheduled_posts %}
-                    {% for post in scheduled_posts %}
-                        <div class="scheduled-post">
-                            <div class="post-left">
-                                <div class="post-title-small">{{ post.title }}</div>
-                                <div class="post-time">{{ post.scheduled_time|date:"F j, Y, g:i a" }}</div>
-                            </div>
-                            <div class="post-right">
-                                <span class="status-badge-sm status-{{ post.status }}">{{ post.get_status_display }}</span>
-                            </div>
-                        </div>
-                    {% endfor %}
+    {% else %}
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                {% if profile_picture %}
+                    <img src="{{ profile_picture }}" alt="Profile Picture" class="profile-picture">
                 {% else %}
-                    <div class="empty-list">
-                        <p>No upcoming posts</p>
-                        <a href="{% url 'accounts:schedule_video' %}" class="button video-button" style="margin-top: 10px;">Schedule Video</a>
+                    <div class="profile-picture">
+                        <span>{{ username|first|upper }}</span>
                     </div>
                 {% endif %}
-            </div>
-            
-            <!-- Recent Notifications -->
-            <div class="dashboard-card">
-                <h3>
-                    Recent Notifications
-                    <a href="{% url 'accounts:notifications' %}" class="view-all">View All</a>
-                </h3>
-                {% if notifications %}
-                    <ul class="notification-list">
-                        {% for notification in notifications %}
-                            <li class="notification-item">
-                                <div class="notification-icon icon-{{ notification.type }}">
-                                    {% if notification.type == 'success' %}
-                                        ✓
-                                    {% elif notification.type == 'error' %}
-                                        !
-                                    {% else %}
-                                        i
-                                    {% endif %}
-                                </div>
-                                <div class="notification-content">
-                                    {{ notification.message }}
-                                    <span class="notification-time">{{ notification.created_at|date:"F j, Y, g:i a" }}</span>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <div class="empty-list">No notifications</div>
-                {% endif %}
+                
+                <div class="username">
+                    <span class="tiktok-logo"></span>
+                    {{ username }}
+                </div>
+                
+                <div class="stats-container">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ followers|default:"0" }}</div>
+                        <div class="stat-label">Followers</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ following|default:"0" }}</div>
+                        <div class="stat-label">Following</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ likes|default:"0" }}</div>
+                        <div class="stat-label">Likes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ videos|default:"0" }}</div>
+                        <div class="stat-label">Videos</div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        {% if videos %}
-            <h2>Your TikTok Videos</h2>
-            <div class="videos-container">
-                {% for video in videos %}
-                    <div class="video-card">
-                        <img src="{{ video.cover_image_url }}" alt="{{ video.title }}" class="video-thumbnail">
-                        <div class="video-info">
-                            <div class="video-title">{{ video.title }}</div>
-                            {% if video.video_description %}
-                                <div class="video-description">{{ video.video_description }}</div>
-                            {% endif %}
-                            {% if video.duration %}
-                                <div class="video-duration">
-                                    <span class="duration-icon">⏱</span> {{ video.duration }} seconds
+        <div class="row mt-4">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Schedule Video <span class="feature-badge">New</span></h5>
+                        <p class="card-text">Plan and schedule your TikTok videos for optimal posting times.</p>
+                        <a href="{% url 'accounts:schedule_video' %}" class="btn btn-secondary">Schedule Video</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Post Photos <span class="feature-badge">New</span></h5>
+                        <p class="card-text">Upload and post photos directly to your TikTok account.</p>
+                        <a href="{% url 'accounts:post_photo' %}" class="btn btn-primary">Post Photos</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Analytics</h5>
+                        <p class="card-text">View detailed analytics about your TikTok performance.</p>
+                        <a href="{% url 'accounts:analytics' %}" class="btn btn-info">View Analytics</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Scheduled Posts</h5>
+                        <p class="card-text">Manage your upcoming scheduled posts.</p>
+                        <a href="{% url 'accounts:scheduled_posts' %}" class="btn btn-outline-secondary">View Scheduled</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if recent_videos %}
+            <h3 class="mt-4 mb-3 text-center">Recent Videos</h3>
+            <div class="row">
+                {% for video in recent_videos %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            {% if video.thumbnail_url %}
+                                <img src="{{ video.thumbnail_url }}" class="card-img-top video-thumbnail" alt="{{ video.title }}">
+                            {% else %}
+                                <div class="card-img-top video-thumbnail bg-light d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-film text-muted" style="font-size: 2rem;"></i>
                                 </div>
                             {% endif %}
-                            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                                <a href="{{ video.embed_link }}" target="_blank" class="video-link" style="margin-top: 0;">Watch Video</a>
-                                {% if video.share_url %}
-                                <a href="{{ video.share_url }}" target="_blank" class="video-link" style="margin-top: 0; color: #00b6f0;">Share</a>
+                            <div class="card-body">
+                                <h5 class="card-title video-title">{{ video.title }}</h5>
+                                <p class="card-text video-description">{{ video.description|truncatechars:60 }}</p>
+                                <p class="text-muted">
+                                    <small>{{ video.created_at|date:"M d, Y" }}</small>
+                                    {% if video.duration %}
+                                        <span class="ms-2 video-duration">
+                                            <i class="bi bi-clock"></i> {{ video.duration }}
+                                        </span>
+                                    {% endif %}
+                                </p>
+                                {% if video.video_url %}
+                                    <a href="{{ video.video_url }}" target="_blank" class="video-link">View on TikTok</a>
                                 {% endif %}
                             </div>
                         </div>
@@ -503,14 +269,10 @@
                 {% endfor %}
             </div>
         {% else %}
-            <div class="no-videos">
-                <p>No videos available. This could be because you haven't uploaded any TikTok videos yet or we don't have permission to access them.</p>
+            <div class="alert alert-info text-center">
+                <p class="no-videos">You don't have any recent videos.</p>
             </div>
         {% endif %}
-        
-        <div class="button-container">
-            <a href="{% url 'accounts:logout' %}" class="button logout-button">Logout</a>
-        </div>
-    </div>
-</body>
-</html>
+    {% endif %}
+</div>
+{% endblock %}

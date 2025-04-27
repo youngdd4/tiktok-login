@@ -1,245 +1,166 @@
-<!-- post_photo.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post Photos to TikTok</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f8f8f8;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-        .form-group {
-            margin-bottom: 25px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #333;
-        }
-        input[type="text"], textarea, select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            box-sizing: border-box;
-        }
-        textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        .checkbox-group input[type="checkbox"] {
-            margin-right: 10px;
-        }
-        .button {
-            background-color: #25F4EE;
-            color: black;
-            border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: inline-block;
-            text-align: center;
-            text-decoration: none;
-        }
-        .button:hover {
-            background-color: #20d5ec;
-        }
-        .button-secondary {
-            background-color: #eee;
-            color: #333;
-            margin-right: 10px;
-        }
-        .button-secondary:hover {
-            background-color: #ddd;
-        }
-        .button-container {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
-        .info-box {
-            background-color: #f0f9ff;
-            border: 1px solid #c0e0ff;
-            border-radius: 4px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .success-message {
-            background-color: #e6f7e6;
-            border: 1px solid #c0e0c0;
-            color: #2c662d;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-        .error-message {
-            background-color: #ffebeb;
-            border: 1px solid #ffbdbd;
-            color: #c62828;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-        .status-box {
-            border: 1px solid #eee;
-            border-radius: 4px;
-            padding: 15px;
-            margin-top: 30px;
-            display: none;
-        }
-        .requirements {
-            background-color: #fff8e1;
-            border-left: 4px solid #ffb300;
-            padding: 12px 15px;
-            margin: 15px 0;
-            font-size: 14px;
-        }
-        .file-upload {
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            padding: 25px;
-            text-align: center;
-            margin-bottom: 20px;
-            transition: background-color 0.3s, border-color 0.3s;
-            position: relative;
-        }
-        .file-upload.drag-over {
-            background-color: rgba(37, 244, 238, 0.1);
-            border-color: #25F4EE;
-        }
-        .file-upload input[type="file"] {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: pointer;
-        }
-        .file-upload-icon {
-            font-size: 48px;
-            color: #ccc;
-            margin-bottom: 10px;
-        }
-        .file-upload-text {
-            margin-bottom: 15px;
-            color: #666;
-        }
-        .upload-btn {
-            background-color: #eee;
-            color: #333;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .preview-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .preview-item {
-            position: relative;
-            width: 120px;
-            height: 120px;
-            border-radius: 4px;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .preview-item img, .preview-item video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .preview-remove {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: rgba(0,0,0,0.5);
-            color: white;
-            border: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .progress-container {
-            width: 100%;
-            background-color: #f1f1f1;
-            border-radius: 4px;
-            margin-top: 20px;
-            display: none;
-        }
-        .progress-bar {
-            height: 10px;
-            border-radius: 4px;
-            background-color: #25F4EE;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        .error-item {
-            color: #c62828;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Post Photos to TikTok</h1>
-        
-        {% if success %}
-        <div class="success-message">
-            {{ success }}
-            {% if publish_id %}
-            <div class="status-box" id="status-box" style="display: block;">
-                <p><strong>Publish ID:</strong> {{ publish_id }}</p>
-                <p><strong>Status:</strong> <span id="status-text">Checking...</span></p>
-                <p id="status-details"></p>
-            </div>
-            {% endif %}
+{% extends "base.html" %}
+
+{% block title %}Post Photos to TikTok{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-group {
+        margin-bottom: 25px;
+    }
+    label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #333;
+    }
+    textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .checkbox-group input[type="checkbox"] {
+        margin-right: 10px;
+    }
+    .status-box {
+        border: 1px solid #eee;
+        border-radius: 4px;
+        padding: 15px;
+        margin-top: 30px;
+        display: none;
+    }
+    .requirements {
+        background-color: #fff8e1;
+        border-left: 4px solid #ffb300;
+        padding: 12px 15px;
+        margin: 15px 0;
+        font-size: 14px;
+    }
+    .file-upload {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 25px;
+        text-align: center;
+        margin-bottom: 20px;
+        transition: background-color 0.3s, border-color 0.3s;
+        position: relative;
+    }
+    .file-upload.drag-over {
+        background-color: rgba(37, 244, 238, 0.1);
+        border-color: #25F4EE;
+    }
+    .file-upload input[type="file"] {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+    .file-upload-icon {
+        font-size: 48px;
+        color: #ccc;
+        margin-bottom: 10px;
+    }
+    .file-upload-text {
+        margin-bottom: 15px;
+        color: #666;
+    }
+    .upload-btn {
+        background-color: #eee;
+        color: #333;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .preview-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    .preview-item {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .preview-item img, .preview-item video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .preview-remove {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: rgba(0,0,0,0.5);
+        color: white;
+        border: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .progress-container {
+        width: 100%;
+        background-color: #f1f1f1;
+        border-radius: 4px;
+        margin-top: 20px;
+        display: none;
+    }
+    .progress-bar {
+        height: 10px;
+        border-radius: 4px;
+        background-color: #25F4EE;
+        width: 0%;
+        transition: width 0.3s;
+    }
+    .error-item {
+        color: #c62828;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Post Photos to TikTok</h1>
+    
+    {% if success %}
+    <div class="alert alert-success">
+        {{ success }}
+        {% if publish_id %}
+        <div class="status-box" id="status-box" style="display: block;">
+            <p><strong>Publish ID:</strong> {{ publish_id }}</p>
+            <p><strong>Status:</strong> <span id="status-text">Checking...</span></p>
+            <p id="status-details"></p>
         </div>
         {% endif %}
-        
-        {% if error %}
-        <div class="error-message">
-            {{ error }}
-        </div>
-        {% endif %}
-        
-        <div class="info-box">
+    </div>
+    {% endif %}
+    
+    {% if error %}
+    <div class="alert alert-danger">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="card mb-4">
+        <div class="card-body">
             <p><strong>New Feature:</strong> You can now post photos directly to TikTok through our app!</p>
             <div class="requirements">
                 <p><strong>Photo Requirements:</strong></p>
@@ -251,243 +172,245 @@
                 </ul>
             </div>
         </div>
-        
-        <form method="post" action="{% url 'accounts:post_photo' %}" enctype="multipart/form-data" id="photo-form">
-            {% csrf_token %}
-            
-            <div class="form-group">
-                <label for="title">Title (Required)</label>
-                <input type="text" id="title" name="title" required maxlength="90" placeholder="Add a title for your post (max 90 characters)">
-                <small>This will be displayed as the title of your TikTok post</small>
-            </div>
-            
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" maxlength="4000" placeholder="Add a description for your post (max 4000 characters). You can use #hashtags and @mentions."></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label>Upload Photos</label>
-                <div class="file-upload" id="drop-area">
-                    <div class="file-upload-icon">📁</div>
-                    <div class="file-upload-text">Drag & drop photos here or click to browse</div>
-                    <button type="button" class="upload-btn">Select Files</button>
-                    <input type="file" id="file-input" name="photos" accept="image/jpeg,image/png,image/webp" multiple>
-                </div>
-                <small>Upload up to 35 photos (JPEG, PNG or WebP format, max 20MB each)</small>
-                <div id="error-container"></div>
-                <div class="preview-container" id="preview-container"></div>
-                <div class="progress-container" id="progress-container">
-                    <div class="progress-bar" id="progress-bar"></div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="privacy_level">Privacy Level</label>
-                <select id="privacy_level" name="privacy_level">
-                    {% for privacy_level in privacy_levels %}
-                        <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
-                    {% empty %}
-                        <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
-                        <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
-                        <option value="SELF_ONLY">Self Only</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="checkbox-group">
-                <input type="checkbox" id="disable_comment" name="disable_comment">
-                <label for="disable_comment">Disable comments</label>
-            </div>
-            
-            <div class="checkbox-group">
-                <input type="checkbox" id="auto_add_music" name="auto_add_music" checked>
-                <label for="auto_add_music">Automatically add music to the photo post</label>
-            </div>
-            
-            <div class="button-container">
-                <a href="{% url 'accounts:dashboard' %}" class="button button-secondary">Back to Dashboard</a>
-                <button type="submit" class="button" id="submit-btn">Post Photos</button>
-            </div>
-        </form>
     </div>
+    
+    <form method="post" action="{% url 'accounts:post_photo' %}" enctype="multipart/form-data" id="photo-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="title">Title (Required)</label>
+            <input type="text" id="title" name="title" required maxlength="90" placeholder="Add a title for your post (max 90 characters)" class="form-control">
+            <small class="text-muted">This will be displayed as the title of your TikTok post</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" maxlength="4000" placeholder="Add a description for your post (max 4000 characters). You can use #hashtags and @mentions." class="form-control"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label>Upload Photos</label>
+            <div class="file-upload" id="drop-area">
+                <div class="file-upload-icon">📁</div>
+                <div class="file-upload-text">Drag & drop photos here or click to browse</div>
+                <button type="button" class="upload-btn">Select Files</button>
+                <input type="file" id="file-input" name="photos" accept="image/jpeg,image/png,image/webp" multiple>
+            </div>
+            <small class="text-muted">Upload up to 35 photos (JPEG, PNG or WebP format, max 20MB each)</small>
+            <div id="error-container"></div>
+            <div class="preview-container" id="preview-container"></div>
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="privacy_level">Privacy Level</label>
+            <select id="privacy_level" name="privacy_level" class="form-control">
+                {% for privacy_level in privacy_levels %}
+                    <option value="{{ privacy_level }}">{{ privacy_level|cut:"_"|title }}</option>
+                {% empty %}
+                    <option value="PUBLIC_TO_EVERYONE">Public To Everyone</option>
+                    <option value="MUTUAL_FOLLOW_FRIENDS">Mutual Follow Friends</option>
+                    <option value="SELF_ONLY">Self Only</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="disable_comment" name="disable_comment">
+            <label for="disable_comment">Disable comments</label>
+        </div>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="auto_add_music" name="auto_add_music" checked>
+            <label for="auto_add_music">Automatically add music to the photo post</label>
+        </div>
+        
+        <div class="mt-4">
+            <a href="{% url 'accounts:dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+            <button type="submit" class="btn btn-primary" id="submit-btn">Post Photos</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const dropArea = document.getElementById('drop-area');
-            const fileInput = document.getElementById('file-input');
-            const previewContainer = document.getElementById('preview-container');
-            const errorContainer = document.getElementById('error-container');
-            const progressContainer = document.getElementById('progress-container');
-            const progressBar = document.getElementById('progress-bar');
-            const form = document.getElementById('photo-form');
-            
-            // Maximum number of files
-            const MAX_FILES = 35;
-            // Maximum file size in bytes (20MB)
-            const MAX_FILE_SIZE = 20 * 1024 * 1024;
-            // Allowed file types
-            const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-            
-            // Uploaded files array
-            let uploadedFiles = [];
-            
-            // Handle click on the upload button
-            dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
-                e.preventDefault();
-                fileInput.click();
-            });
-            
-            // Handle drag and drop events
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropArea.addEventListener(eventName, function() {
-                    dropArea.classList.add('drag-over');
-                }, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, function() {
-                    dropArea.classList.remove('drag-over');
-                }, false);
-            });
-            
-            // Handle dropped files
-            dropArea.addEventListener('drop', function(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                handleFiles(files);
-            });
-            
-            // Handle file input change
-            fileInput.addEventListener('change', function() {
-                handleFiles(this.files);
-            });
-            
-            // Handle files
-            function handleFiles(files) {
-                if (uploadedFiles.length + files.length > MAX_FILES) {
-                    showError(`You can only upload up to ${MAX_FILES} photos`);
-                    return;
-                }
-                
-                Array.from(files).forEach(file => {
-                    // Validate file type
-                    if (!ALLOWED_TYPES.includes(file.type)) {
-                        showError(`${file.name} is not a valid image type. Please upload JPEG, PNG, or WebP images.`);
-                        return;
-                    }
-                    
-                    // Validate file size
-                    if (file.size > MAX_FILE_SIZE) {
-                        showError(`${file.name} exceeds the maximum file size of 20MB.`);
-                        return;
-                    }
-                    
-                    // Add to uploaded files array
-                    uploadedFiles.push(file);
-                    
-                    // Create preview
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const preview = createPreviewItem(e.target.result, file.name, uploadedFiles.length - 1);
-                        previewContainer.appendChild(preview);
-                    };
-                    reader.readAsDataURL(file);
-                });
-            }
-            
-            // Create preview item
-            function createPreviewItem(src, filename, index) {
-                const div = document.createElement('div');
-                div.className = 'preview-item';
-                div.dataset.index = index;
-                
-                const img = document.createElement('img');
-                img.src = src;
-                img.alt = filename;
-                div.appendChild(img);
-                
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'preview-remove';
-                removeBtn.innerHTML = '×';
-                removeBtn.addEventListener('click', function() {
-                    removeFile(index);
-                    div.remove();
-                });
-                div.appendChild(removeBtn);
-                
-                return div;
-            }
-            
-            // Remove file from uploaded files array
-            function removeFile(index) {
-                uploadedFiles = uploadedFiles.filter((_, i) => i !== parseInt(index));
-                
-                // Update indices of remaining preview items
-                const previewItems = previewContainer.querySelectorAll('.preview-item');
-                previewItems.forEach((item, i) => {
-                    if (parseInt(item.dataset.index) > index) {
-                        item.dataset.index = parseInt(item.dataset.index) - 1;
-                    }
-                });
-            }
-            
-            // Show error message
-            function showError(message) {
-                const error = document.createElement('div');
-                error.className = 'error-item';
-                error.textContent = message;
-                errorContainer.appendChild(error);
-                
-                // Remove error after 5 seconds
-                setTimeout(() => {
-                    error.remove();
-                }, 5000);
-            }
-            
-            // Handle form submission
-            form.addEventListener('submit', function(e) {
-                // Always prevent default to simulate submission without actual processing
-                e.preventDefault();
-                
-                // Validate that we have at least one file
-                if (uploadedFiles.length === 0) {
-                    showError('Please upload at least one photo');
-                    return;
-                }
-                
-                // Simulate upload progress
-                progressContainer.style.display = 'block';
-                progressBar.style.width = '0%';
-                
-                let progress = 0;
-                const interval = setInterval(() => {
-                    progress += 5;
-                    progressBar.style.width = `${progress}%`;
-                    
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        // Show success message
-                        const successMessage = document.createElement('div');
-                        successMessage.className = 'success-message';
-                        successMessage.innerHTML = 'Your photos have been uploaded! (This is just a UI demo, no actual upload occurred)';
-                        form.parentNode.insertBefore(successMessage, form);
-                        
-                        // Hide form
-                        form.style.display = 'none';
-                    }
-                }, 100);
-            });
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const errorContainer = document.getElementById('error-container');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const form = document.getElementById('photo-form');
+        
+        // Maximum number of files
+        const MAX_FILES = 35;
+        // Maximum file size in bytes (20MB)
+        const MAX_FILE_SIZE = 20 * 1024 * 1024;
+        // Allowed file types
+        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+        
+        // Uploaded files array
+        let uploadedFiles = [];
+        
+        // Handle click on the upload button
+        dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            fileInput.click();
         });
-    </script>
-</body>
-</html> 
+        
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function() {
+                dropArea.classList.add('drag-over');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function() {
+                dropArea.classList.remove('drag-over');
+            }, false);
+        });
+        
+        // Handle dropped files
+        dropArea.addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        });
+        
+        // Handle file input change
+        fileInput.addEventListener('change', function() {
+            handleFiles(this.files);
+        });
+        
+        // Handle files
+        function handleFiles(files) {
+            if (uploadedFiles.length + files.length > MAX_FILES) {
+                showError(`You can only upload up to ${MAX_FILES} photos`);
+                return;
+            }
+            
+            Array.from(files).forEach(file => {
+                // Validate file type
+                if (!ALLOWED_TYPES.includes(file.type)) {
+                    showError(`${file.name} is not a valid image type. Please upload JPEG, PNG, or WebP images.`);
+                    return;
+                }
+                
+                // Validate file size
+                if (file.size > MAX_FILE_SIZE) {
+                    showError(`${file.name} exceeds the maximum file size of 20MB.`);
+                    return;
+                }
+                
+                // Add to uploaded files array
+                uploadedFiles.push(file);
+                
+                // Create preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = createPreviewItem(e.target.result, file.name, uploadedFiles.length - 1);
+                    previewContainer.appendChild(preview);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        // Create preview item
+        function createPreviewItem(src, filename, index) {
+            const div = document.createElement('div');
+            div.className = 'preview-item';
+            div.dataset.index = index;
+            
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = filename;
+            div.appendChild(img);
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'preview-remove';
+            removeBtn.innerHTML = '×';
+            removeBtn.addEventListener('click', function() {
+                removeFile(index);
+                div.remove();
+            });
+            div.appendChild(removeBtn);
+            
+            return div;
+        }
+        
+        // Remove file from uploaded files array
+        function removeFile(index) {
+            uploadedFiles = uploadedFiles.filter((_, i) => i !== parseInt(index));
+            
+            // Update indices of remaining preview items
+            const previewItems = previewContainer.querySelectorAll('.preview-item');
+            previewItems.forEach((item, i) => {
+                if (parseInt(item.dataset.index) > index) {
+                    item.dataset.index = parseInt(item.dataset.index) - 1;
+                }
+            });
+        }
+        
+        // Show error message
+        function showError(message) {
+            const error = document.createElement('div');
+            error.className = 'error-item';
+            error.textContent = message;
+            errorContainer.appendChild(error);
+            
+            // Remove error after 5 seconds
+            setTimeout(() => {
+                error.remove();
+            }, 5000);
+        }
+        
+        // Handle form submission
+        form.addEventListener('submit', function(e) {
+            // Always prevent default to simulate submission without actual processing
+            e.preventDefault();
+            
+            // Validate that we have at least one file
+            if (uploadedFiles.length === 0) {
+                showError('Please upload at least one photo');
+                return;
+            }
+            
+            // Simulate upload progress
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 5;
+                progressBar.style.width = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    // Show success message
+                    const successMessage = document.createElement('div');
+                    successMessage.className = 'alert alert-success';
+                    successMessage.innerHTML = 'Your photos have been uploaded! (This is just a UI demo, no actual upload occurred)';
+                    form.parentNode.insertBefore(successMessage, form);
+                    
+                    // Hide form
+                    form.style.display = 'none';
+                }
+            }, 100);
+        });
+    });
+</script>
+{% endblock %} 
