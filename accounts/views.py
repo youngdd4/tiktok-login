@@ -925,7 +925,7 @@ def schedule_video_view(request):
                     context['privacy_levels'] = privacy_levels
                     
                 # Get creator info for duet, stitch settings
-        creator_info = get_creator_info(access_token)
+                creator_info = get_creator_info(access_token)
                 if creator_info:
                     context['comment_disabled'] = creator_info.get('comment_disabled', False)
                     context['duet_disabled'] = creator_info.get('duet_disabled', False)
