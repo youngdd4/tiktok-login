@@ -180,6 +180,9 @@
         </div>
         {% endif %}
         
+        <!-- New validation message area that will be shown via JavaScript -->
+        <div id="validation-message" class="alert alert-warning" style="display: none;"></div>
+        
     <div class="card mb-4">
         <div class="card-body">
             <p><strong>Video Scheduling:</strong> Create and schedule videos to be posted to your TikTok account at specific times.</p>
@@ -291,6 +294,7 @@
             const hashtagContainer = document.getElementById('hashtag-container');
             const hashtagsHiddenInput = document.getElementById('hashtags');
             const addHashtagBtn = document.getElementById('add-hashtag');
+            const validationMessage = document.getElementById('validation-message');
             let hashtags = [];
             
             // Add hashtag when Enter is pressed
@@ -490,28 +494,70 @@
                 error.className = 'error-item alert alert-danger';
                 error.textContent = message;
                 errorContainer.appendChild(error);
+                
+                // Also show in the validation message area
+                validationMessage.textContent = message;
+                validationMessage.style.display = 'block';
+                
+                // Scroll to the validation message
+                validationMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
             
             // Handle form submission
             const form = document.getElementById('video-form');
             form.addEventListener('submit', function(e) {
-                // Don't prevent default to allow actual form submission
+                // Always prevent default to check validation
+                e.preventDefault();
+                
+                // Clear previous validation messages
+                errorContainer.innerHTML = '';
+                validationMessage.style.display = 'none';
+                
+                // Get required fields
+                const title = document.getElementById('title').value.trim();
+                const scheduledTime = document.getElementById('scheduled_time').value;
+                const videoUrl = document.getElementById('video_url').value.trim();
+                
+                // Validate title
+                if (!title) {
+                    showError('Please provide a title for your video');
+                    return;
+                }
                 
                 // Check that either a video URL or file is provided
-                const videoUrl = document.getElementById('video_url').value.trim();
                 if (!uploadedVideo && !videoUrl) {
-                    e.preventDefault();
                     showError('Please either upload a video file or provide a video URL');
+                    console.log('Validation failed: No video file or URL provided');
                     return;
+                }
+                
+                // Validate video URL if provided
+                if (!uploadedVideo && videoUrl) {
+                    // Basic URL validation for video files
+                    if (!videoUrl.match(/^https?:\/\/.+\.(mp4|mov|avi|wmv)(\?.*)?$/i)) {
+                        showError('Please enter a valid video URL ending with .mp4, .mov, .avi, or .wmv');
+                        console.log('Validation failed: Invalid video URL format');
+                        return;
+                    }
                 }
                 
                 // Check if a scheduled time is selected
-                const scheduledTime = document.getElementById('scheduled_time').value;
                 if (!scheduledTime) {
-                    e.preventDefault();
                     showError('Please select a schedule time');
                     return;
                 }
+                
+                // Validate scheduled time is in the future
+                const scheduledDate = new Date(scheduledTime);
+                const now = new Date();
+                if (scheduledDate <= now) {
+                    showError('Scheduled time must be in the future');
+                    return;
+                }
+                
+                // If validation passes, submit the form
+                console.log('Validation passed, submitting form');
+                this.submit();
             });
         });
     </script>

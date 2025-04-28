@@ -496,8 +496,8 @@ def post_photo_view(request):
             print(f"FILES data: {request.FILES}", file=sys.stderr)
             
             # Get form data
-            title = request.POST.get('title', '')
-            description = request.POST.get('description', '')
+            title = request.POST.get('title', '').strip()
+            description = request.POST.get('description', '').strip()
             privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
             disable_comment = request.POST.get('disable_comment', '') == 'on'
             auto_add_music = request.POST.get('auto_add_music', '') == 'on'
@@ -507,7 +507,7 @@ def post_photo_view(request):
             photo_urls = []
             cloudinary_public_id = ""
             
-            if 'photos' in request.FILES:
+            if 'photos' in request.FILES and request.FILES['photos']:
                 # Get the uploaded file (only one allowed)
                 uploaded_file = request.FILES['photos']
                 print(f"Received file: {uploaded_file.name}, size: {uploaded_file.size}, type: {uploaded_file.content_type}", file=sys.stderr)
@@ -539,16 +539,21 @@ def post_photo_view(request):
                 # Fall back to URL-based uploads
                 photo_url = request.POST.get('photo_url', '').strip()
                 if photo_url:
+                    # Basic URL validation
+                    if not any(photo_url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                        context['error'] = 'Invalid photo URL format. URL must end with .jpg, .jpeg, .png, or .webp'
+                        return render(request, 'accounts/post_photo.html', context)
+                    
                     photo_urls.append(photo_url)
                     print(f"Using photo URL: {photo_url}", file=sys.stderr)
             
             # Basic validation
-            if not photo_urls:
-                context['error'] = 'Please provide a photo by uploading or entering a URL'
-                return render(request, 'accounts/post_photo.html', context)
-                
             if not title:
                 context['error'] = 'Please provide a title for your post'
+                return render(request, 'accounts/post_photo.html', context)
+                
+            if not photo_urls:
+                context['error'] = 'Please provide a photo by uploading or entering a URL'
                 return render(request, 'accounts/post_photo.html', context)
             
             # Attempt to post photo
@@ -811,11 +816,15 @@ def schedule_video_view(request):
         
         # Handle form submission
         if request.method == 'POST':
+            # Debug form data
+            print(f"POST data: {request.POST}", file=sys.stderr)
+            print(f"FILES data: {request.FILES}", file=sys.stderr)
+            
             # Get form data
-            title = request.POST.get('title', '')
-            description = request.POST.get('description', '')
-            video_url = request.POST.get('video_url', '')
-            scheduled_time_str = request.POST.get('scheduled_time', '')
+            title = request.POST.get('title', '').strip()
+            description = request.POST.get('description', '').strip()
+            video_url = request.POST.get('video_url', '').strip()
+            scheduled_time_str = request.POST.get('scheduled_time', '').strip()
             privacy_level = request.POST.get('privacy_level', 'PUBLIC_TO_EVERYONE')
             disable_comment = request.POST.get('disable_comment', '') == 'on'
             disable_duet = request.POST.get('disable_duet', '') == 'on'
@@ -826,7 +835,7 @@ def schedule_video_view(request):
             uploaded_file = None
             cloudinary_public_id = ""
             
-            if 'video_file' in request.FILES:
+            if 'video_file' in request.FILES and request.FILES['video_file']:
                 uploaded_file = request.FILES['video_file']
                 
                 # Validate file type
@@ -842,20 +851,30 @@ def schedule_video_view(request):
                 
                 # Upload to Cloudinary
                 try:
+                    print(f"Uploading video to Cloudinary: {uploaded_file.name}", file=sys.stderr)
                     upload_result = upload_media(uploaded_file, resource_type="video")
                     video_url = upload_result.get('secure_url')
                     cloudinary_public_id = upload_result.get('public_id')
+                    print(f"Cloudinary upload success: {video_url}, public_id: {cloudinary_public_id}", file=sys.stderr)
                 except Exception as e:
+                    print(f"Cloudinary upload error: {str(e)}", file=sys.stderr)
                     context['error'] = f'Error uploading to cloud storage: {str(e)}'
                     return render(request, 'accounts/schedule_video.html', context)
+            elif video_url:
+                # Validate video URL format
+                if not any(video_url.lower().endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.wmv']):
+                    context['error'] = 'Invalid video URL format. URL must end with .mp4, .mov, .avi, or .wmv'
+                    return render(request, 'accounts/schedule_video.html', context)
+                
+                print(f"Using provided video URL: {video_url}", file=sys.stderr)
             
             # Basic validation
-            if not video_url:
-                context['error'] = 'Please provide a video URL or upload a video file'
-                return render(request, 'accounts/schedule_video.html', context)
-                
             if not title:
                 context['error'] = 'Please provide a title for your post'
+                return render(request, 'accounts/schedule_video.html', context)
+                
+            if not video_url:
+                context['error'] = 'Please provide a video URL or upload a video file'
                 return render(request, 'accounts/schedule_video.html', context)
             
             if not scheduled_time_str:

@@ -159,6 +159,9 @@
         </div>
         {% endif %}
         
+        <!-- New validation message area that will be shown via JavaScript -->
+        <div id="validation-message" class="alert alert-warning" style="display: none;"></div>
+        
     <div class="card mb-4">
         <div class="card-body">
             <p><strong>New Feature:</strong> You can now post photos directly to TikTok through our app!</p>
@@ -255,6 +258,7 @@
         const statusText = statusBox ? document.getElementById('status-text') : null;
         const statusDetails = statusBox ? document.getElementById('status-details') : null;
         const publishId = {% if publish_id %}'{{ publish_id }}'{% else %}null{% endif %};
+        const validationMessage = document.getElementById('validation-message');
         
         // Maximum file size in bytes (20MB)
         const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -353,6 +357,8 @@
         function handleFile(file) {
             // Clear previous uploads and previews
             clearFilePreview();
+            // Clear any previous errors
+            errorContainer.innerHTML = '';
             
             // Validate file type
             if (!ALLOWED_TYPES.includes(file.type)) {
@@ -408,35 +414,74 @@
         
         // Show error message
         function showError(message) {
+            // Clear previous errors
+            errorContainer.innerHTML = '';
+            
             const error = document.createElement('div');
-            error.className = 'error-item';
+            error.className = 'error-item alert alert-danger';
             error.textContent = message;
             errorContainer.appendChild(error);
             
-            // Remove error after 5 seconds
-            setTimeout(() => {
-                error.remove();
-            }, 5000);
+            // Also show in the validation message area
+            validationMessage.textContent = message;
+            validationMessage.style.display = 'block';
+            
+            // Scroll to the validation message
+            validationMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         
         // Handle form submission
         form.addEventListener('submit', function(e) {
-            // Don't prevent default to allow actual form submission
+            // Always prevent default to check validation
+            e.preventDefault();
             
-            // Check if we have a file or URL
-            const photoUrl = document.getElementById('photo_url').value.trim();
-            if (!uploadedFile && !photoUrl) {
-                e.preventDefault();
-                showError('Please either upload a photo or provide a photo URL');
+            // Clear any previous errors
+            errorContainer.innerHTML = '';
+            validationMessage.style.display = 'none';
+            
+            // Get the title
+            const title = document.getElementById('title').value.trim();
+            if (!title) {
+                showError('Please provide a title for your post');
                 return;
             }
             
-            // Show progress indicator for UI feedback only
+            // Check if we have a file or URL
+            const photoUrl = document.getElementById('photo_url').value.trim();
+            console.log('Form submission - File:', uploadedFile ? uploadedFile.name : 'none', 'URL:', photoUrl);
+            
+            if (!uploadedFile && !photoUrl) {
+                showError('Please either upload a photo or provide a photo URL');
+                console.log('Validation failed: No file or URL provided');
+                return; // Stop form submission
+            }
+            
+            // Additional validation for the URL if provided
+            if (!uploadedFile && photoUrl) {
+                // Basic URL validation
+                if (!photoUrl.match(/^https?:\/\/.+\.(jpg|jpeg|png|webp)(\?.*)?$/i)) {
+                    showError('Please enter a valid image URL ending with .jpg, .jpeg, .png, or .webp');
+                    console.log('Validation failed: Invalid URL format');
+                    return;
+                }
+            }
+            
+            // If validation passes, show progress and submit
+            console.log('Validation passed, submitting form');
             progressContainer.style.display = 'block';
             progressBar.style.width = '100%';
             
-            // Let the form submit naturally to the server
-            // The backend will handle the file upload to Cloudinary
+            // Make sure the file is properly attached to the form
+            if (uploadedFile) {
+                // Create a new FileList object with our uploadedFile (browser doesn't allow direct assignment)
+                // Instead, we'll create a new DataTransfer object and append our file
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(uploadedFile);
+                fileInput.files = dataTransfer.files;
+            }
+            
+            // Submit the form
+            this.submit();
         });
     });
     </script>
