@@ -506,21 +506,60 @@ def proxy_media(request, media_id, filename):
     Proxy endpoint to serve Cloudinary media through our domain
     """
     try:
-        # Construct Cloudinary URL
+        # Construct Cloudinary public ID
         public_id = f"tiktok_media/{media_id}"
+        
+        # Determine resource type from filename
+        resource_type = "image"  # Default to image
+        if filename.lower().endswith(('.mp4', '.mov', '.avi', '.wmv')):
+            resource_type = "video"
         
         # Get resource info from Cloudinary to check if it exists
         from cloudinary.api import resource
         try:
-            resource_info = resource(public_id, resource_type="image")
+            resource_info = resource(public_id, resource_type=resource_type)
             media_url = resource_info.get('secure_url')
+            
+            if not media_url:
+                # If not found with specified resource type, try the other type
+                alt_resource_type = "video" if resource_type == "image" else "image"
+                try:
+                    resource_info = resource(public_id, resource_type=alt_resource_type)
+                    media_url = resource_info.get('secure_url')
+                    resource_type = alt_resource_type
+                    
+                    if not media_url:
+                        return HttpResponse("Media not found", status=404)
+                except:
+                    return HttpResponse("Media not found", status=404)
+                
+            # Fetch the actual media content
+            media_response = requests.get(media_url, stream=True)
+            
+            if media_response.status_code != 200:
+                return HttpResponse("Error fetching media", status=media_response.status_code)
+            
+            # Get content type from Cloudinary resource or from response
+            if resource_type == 'image':
+                content_type = media_response.headers.get('Content-Type', 'image/jpeg')
+            else:  # video
+                content_type = media_response.headers.get('Content-Type', 'video/mp4')
+            
+            # Stream the response content
+            response = HttpResponse(
+                streaming_content=media_response.iter_content(chunk_size=8192),
+                content_type=content_type
+            )
+            
+            # Set cache headers
+            response['Cache-Control'] = 'max-age=86400, public'  # Cache for a day
+            
+            return response
+            
         except Exception as e:
             print(f"Error fetching resource from Cloudinary: {str(e)}", file=sys.stderr)
             return HttpResponse("Media not found", status=404)
         
-        # Redirect to the Cloudinary URL
-        # This is more efficient than downloading and re-serving the file
-        return redirect(media_url)
     except Exception as e:
         print(f"Error in proxy_media: {str(e)}", file=sys.stderr)
         return HttpResponse("Media not found", status=404)
@@ -812,6 +851,51 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
         if not access_token:
             return {'success': False, 'error': 'No access token available. Please log in again.'}
         
+        # Convert Cloudinary URLs to proxied URLs through our verified domain
+        verified_domain_urls = []
+        for cloudinary_url in photo_urls:
+            try:
+                # Extract the public_id from the Cloudinary URL
+                public_id = extract_public_id_from_url(cloudinary_url)
+                if not public_id:
+                    return {'success': False, 'error': 'Could not extract public ID from Cloudinary URL'}
+                
+                # Create a media ID (just the last part of the public_id)
+                media_id = public_id.split('/')[-1]
+                
+                # Determine file extension from URL
+                extension = 'jpg'  # Default to jpg
+                if '.png' in cloudinary_url.lower():
+                    extension = 'png'
+                elif '.webp' in cloudinary_url.lower():
+                    extension = 'webp'
+                
+                # Create filename
+                filename = f"image_{media_id}.{extension}"
+                
+                # Create URL through our proxy using the verified domain
+                host = request.get_host()
+                scheme = request.scheme
+                
+                # Always use the verified domain in production
+                if 'localhost' in host or '127.0.0.1' in host:
+                    # For local development, use the current host
+                    proxied_url = f"{scheme}://{host}/accounts/media/{media_id}/{filename}"
+                else:
+                    # For production, use verified domain
+                    proxied_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
+                
+                verified_domain_urls.append(proxied_url)
+                print(f"Converted Cloudinary URL: {cloudinary_url}", file=sys.stderr)
+                print(f"To verified domain URL: {proxied_url}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error converting URL: {str(e)}", file=sys.stderr)
+                return {'success': False, 'error': f'Error converting media URL: {str(e)}'}
+        
+        # If we couldn't convert any URLs, fail
+        if not verified_domain_urls:
+            return {'success': False, 'error': 'Could not create valid media URLs'}
+        
         # Prepare API request
         content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
         headers = {
@@ -836,7 +920,7 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
             'source_info': {
                 'source': 'PULL_FROM_URL',
                 'photo_cover_index': 0,  # Use first image as cover
-                'photo_images': photo_urls
+                'photo_images': verified_domain_urls
             },
             'post_mode': 'DIRECT_POST',
             'media_type': 'PHOTO',
@@ -1492,6 +1576,37 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
         if not access_token:
             return {'success': False, 'error': 'No access token available'}
         
+        # Convert Cloudinary video URL to proxied URL through our verified domain
+        try:
+            # Extract the public_id from the Cloudinary URL
+            public_id = extract_public_id_from_url(video_url)
+            if not public_id:
+                return {'success': False, 'error': 'Could not extract public ID from Cloudinary URL'}
+            
+            # Create a media ID (just the last part of the public_id)
+            media_id = public_id.split('/')[-1]
+            
+            # Determine file extension from URL
+            extension = 'mp4'  # Default to mp4
+            if '.mov' in video_url.lower():
+                extension = 'mov'
+            elif '.avi' in video_url.lower():
+                extension = 'avi'
+            elif '.wmv' in video_url.lower():
+                extension = 'wmv'
+            
+            # Create filename
+            filename = f"video_{media_id}.{extension}"
+            
+            # Always use the verified domain for production
+            verified_video_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
+            
+            print(f"Converted Cloudinary URL: {video_url}", file=sys.stderr)
+            print(f"To verified domain URL: {verified_video_url}", file=sys.stderr)
+        except Exception as e:
+            print(f"Error converting video URL: {str(e)}", file=sys.stderr)
+            return {'success': False, 'error': f'Error converting video URL: {str(e)}'}
+        
         # Prepare API request
         video_init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
         headers = {
@@ -1499,18 +1614,23 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             'Content-Type': 'application/json; charset=UTF-8'
         }
         
+        # Override privacy_level to SELF_ONLY for unaudited apps
+        # This is required by TikTok until your app passes an audit
+        forced_privacy = "SELF_ONLY"
+        print(f"Forcing privacy level to {forced_privacy} as required for unaudited apps", file=sys.stderr)
+        
         # Create request payload
         payload = {
             'post_info': {
                 'title': title,
-                'privacy_level': privacy_level,
+                'privacy_level': forced_privacy,  # Always use SELF_ONLY until app is audited
                 'disable_duet': disable_duet,
                 'disable_comment': disable_comment,
                 'disable_stitch': disable_stitch
             },
             'source_info': {
                 'source': 'PULL_FROM_URL',
-                'video_url': video_url
+                'video_url': verified_video_url
             }
         }
         
@@ -1691,6 +1811,42 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
         if not access_token:
             return {'success': False, 'error': 'No access token available'}
         
+        # Convert Cloudinary URLs to proxied URLs through our verified domain
+        verified_domain_urls = []
+        for cloudinary_url in photo_urls:
+            try:
+                # Extract the public_id from the Cloudinary URL
+                public_id = extract_public_id_from_url(cloudinary_url)
+                if not public_id:
+                    return {'success': False, 'error': 'Could not extract public ID from Cloudinary URL'}
+                
+                # Create a media ID (just the last part of the public_id)
+                media_id = public_id.split('/')[-1]
+                
+                # Determine file extension from URL
+                extension = 'jpg'  # Default to jpg
+                if '.png' in cloudinary_url.lower():
+                    extension = 'png'
+                elif '.webp' in cloudinary_url.lower():
+                    extension = 'webp'
+                
+                # Create filename
+                filename = f"image_{media_id}.{extension}"
+                
+                # For batch processing without a request object, always use the verified domain
+                proxied_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
+                
+                verified_domain_urls.append(proxied_url)
+                print(f"Converted Cloudinary URL: {cloudinary_url}", file=sys.stderr)
+                print(f"To verified domain URL: {proxied_url}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error converting URL: {str(e)}", file=sys.stderr)
+                return {'success': False, 'error': f'Error converting media URL: {str(e)}'}
+        
+        # If we couldn't convert any URLs, fail
+        if not verified_domain_urls:
+            return {'success': False, 'error': 'Could not create valid media URLs'}
+        
         # Prepare API request
         content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
         headers = {
@@ -1715,7 +1871,7 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
             'source_info': {
                 'source': 'PULL_FROM_URL',
                 'photo_cover_index': 0,  # Use first image as cover
-                'photo_images': photo_urls
+                'photo_images': verified_domain_urls
             },
             'post_mode': 'DIRECT_POST',
             'media_type': 'PHOTO',
