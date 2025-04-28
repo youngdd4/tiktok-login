@@ -16,6 +16,7 @@ urlpatterns = [
     
     # Media proxy endpoint
     path('media/<str:media_id>/<str:filename>', views.proxy_media, name='proxy_media'),
+    path('media/test/', views.test_media_endpoint, name='test_media_endpoint'),  # Test endpoint
     
     # New Video Scheduling Routes
     path('post/video/', views.schedule_video_view, name='schedule_video'),
