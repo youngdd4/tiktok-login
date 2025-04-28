@@ -303,6 +303,29 @@ def tiktok_callback(request):
                         user_id = user.id
                         request.session['user_id'] = user_id
                     
+                    # Now create or update the TikTokProfile in the database
+                    try:
+                        # Get expiration time for token (default to 1 day if not provided)
+                        expires_in = token_data.get('expires_in', 86400)  # Default to 1 day
+                        token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+                        
+                        # Create or update TikTok profile
+                        tiktok_profile, created = TikTokProfile.objects.update_or_create(
+                            user_id=user_id,
+                            defaults={
+                                'tiktok_id': open_id,
+                                'username': request.session.get('tiktok_username', ''),
+                                'profile_picture': request.session.get('tiktok_profile_picture', ''),
+                                'access_token': access_token,
+                                'refresh_token': refresh_token,
+                                'token_expires_at': token_expires_at
+                            }
+                        )
+                        print(f"TikTok profile {'created' if created else 'updated'} for user_id: {user_id}", file=sys.stderr)
+                    except Exception as profile_error:
+                        print(f"Error saving TikTok profile: {str(profile_error)}", file=sys.stderr)
+                        # Continue with login even if profile save fails
+                    
                     print(f"Login successful, redirecting to dashboard", file=sys.stderr)
                     return redirect('accounts:dashboard')
                 else:
@@ -623,7 +646,7 @@ def post_photo_view(request):
             # Attempt to post photo
             try:
                 result = post_photos_to_tiktok(
-                    request.session.get('user_id'),
+                    request,
                     title,
                     description,
                     photo_urls,
@@ -749,15 +772,45 @@ def get_creator_privacy_levels(access_token):
         print(f"Error fetching creator info: {str(e)}", file=sys.stderr)
         return []
 
-def post_photos_to_tiktok(user_id, title, description, photo_urls, privacy_level, disable_comment, auto_add_music):
+def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level, disable_comment, auto_add_music):
     """Post photos to TikTok using the Content Posting API"""
     try:
-        # Get user's access token
-        profile = TikTokProfile.objects.get(user_id=user_id)
-        access_token = profile.access_token
+        # Get user ID from the request
+        user_id = request.session.get('user_id')
+        
+        # Try to get user's access token from TikTokProfile
+        access_token = None
+        try:
+            profile = TikTokProfile.objects.get(user_id=user_id)
+            access_token = profile.access_token
+        except TikTokProfile.DoesNotExist:
+            # If profile doesn't exist, get token from session
+            access_token = request.session.get('tiktok_access_token')
+            print(f"Using access token from session for user {user_id}", file=sys.stderr)
+            
+            # If we have the token in session, create the profile
+            if access_token and user_id:
+                try:
+                    open_id = request.session.get('tiktok_open_id')
+                    refresh_token = request.session.get('tiktok_refresh_token', '')
+                    # Default expiration to 1 day
+                    token_expires_at = timezone.now() + timedelta(days=1)
+                    
+                    TikTokProfile.objects.create(
+                        user_id=user_id,
+                        tiktok_id=open_id,
+                        username=request.session.get('tiktok_username', ''),
+                        profile_picture=request.session.get('tiktok_profile_picture', ''),
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                        token_expires_at=token_expires_at
+                    )
+                    print(f"Created TikTok profile for user_id: {user_id}", file=sys.stderr)
+                except Exception as e:
+                    print(f"Error creating TikTok profile: {str(e)}", file=sys.stderr)
         
         if not access_token:
-            return {'success': False, 'error': 'No access token available'}
+            return {'success': False, 'error': 'No access token available. Please log in again.'}
         
         # Prepare API request
         content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
@@ -803,8 +856,6 @@ def post_photos_to_tiktok(user_id, title, description, photo_urls, privacy_level
         
         return {'success': False, 'error': f"API error: {response.status_code} - {response.text}"}
     
-    except TikTokProfile.DoesNotExist:
-        return {'success': False, 'error': 'TikTok profile not found for this user'}
     except Exception as e:
         print(f"Error in post_photos_to_tiktok: {str(e)}", file=sys.stderr)
         return {'success': False, 'error': str(e)}
@@ -1292,8 +1343,7 @@ def process_scheduled_posts():
                 if ',' in post.media_url:
                     photo_urls = [url.strip() for url in post.media_url.split(',')]
                 
-                result = post_photos_to_tiktok(
-                    # Get access token for user
+                result = post_photos_to_tiktok_batch(
                     user_id=post.user_id,
                     title=post.title,
                     description=post.description,
@@ -1618,3 +1668,67 @@ def analytics_view(request):
             'error': "An error occurred while loading analytics."
         }
         return render(request, 'accounts/analytics.html', context)
+
+def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy_level, disable_comment, auto_add_music):
+    """
+    Version of post_photos_to_tiktok for scheduled posts that doesn't require a request object
+    """
+    try:
+        # Try to get user's access token from TikTokProfile
+        access_token = None
+        try:
+            profile = TikTokProfile.objects.get(user_id=user_id)
+            access_token = profile.access_token
+        except TikTokProfile.DoesNotExist:
+            return {'success': False, 'error': 'TikTok profile not found for this user'}
+        
+        if not access_token:
+            return {'success': False, 'error': 'No access token available'}
+        
+        # Prepare API request
+        content_init_url = "https://open.tiktokapis.com/v2/post/publish/content/init/"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Create request payload
+        payload = {
+            'post_info': {
+                'title': title,
+                'description': description,
+                'disable_comment': disable_comment,
+                'privacy_level': privacy_level,
+                'auto_add_music': auto_add_music
+            },
+            'source_info': {
+                'source': 'PULL_FROM_URL',
+                'photo_cover_index': 0,  # Use first image as cover
+                'photo_images': photo_urls
+            },
+            'post_mode': 'DIRECT_POST',
+            'media_type': 'PHOTO'
+        }
+        
+        print("Posting photos to TikTok with payload:", file=sys.stderr)
+        print(json.dumps(payload, indent=2), file=sys.stderr)
+        
+        response = requests.post(content_init_url, headers=headers, json=payload)
+        print(f"Photo post response code: {response.status_code}", file=sys.stderr)
+        print(f"Photo post response content: {response.text}", file=sys.stderr)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('error', {}).get('code') == 'ok':
+                publish_id = data.get('data', {}).get('publish_id')
+                return {'success': True, 'publish_id': publish_id}
+            else:
+                error = data.get('error', {})
+                error_msg = f"{error.get('code')}: {error.get('message')}"
+                return {'success': False, 'error': error_msg}
+        
+        return {'success': False, 'error': f"API error: {response.status_code} - {response.text}"}
+    
+    except Exception as e:
+        print(f"Error in post_photos_to_tiktok_batch: {str(e)}", file=sys.stderr)
+        return {'success': False, 'error': str(e)}
