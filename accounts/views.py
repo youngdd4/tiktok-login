@@ -819,13 +819,18 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
             'Content-Type': 'application/json'
         }
         
-        # Create request payload
+        # Override privacy_level to SELF_ONLY for unaudited apps
+        # This is required by TikTok until your app passes an audit
+        forced_privacy = "SELF_ONLY"
+        print(f"Forcing privacy level to {forced_privacy} as required for unaudited apps", file=sys.stderr)
+        
+        # Create request payload with required fields parameter
         payload = {
             'post_info': {
                 'title': title,
                 'description': description,
                 'disable_comment': disable_comment,
-                'privacy_level': privacy_level,
+                'privacy_level': forced_privacy,  # Always use SELF_ONLY until app is audited
                 'auto_add_music': auto_add_music
             },
             'source_info': {
@@ -834,7 +839,8 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
                 'photo_images': photo_urls
             },
             'post_mode': 'DIRECT_POST',
-            'media_type': 'PHOTO'
+            'media_type': 'PHOTO',
+            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field that was missing
         }
         
         print("Posting photos to TikTok with payload:", file=sys.stderr)
@@ -1692,13 +1698,18 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
             'Content-Type': 'application/json'
         }
         
-        # Create request payload
+        # Override privacy_level to SELF_ONLY for unaudited apps
+        # This is required by TikTok until your app passes an audit
+        forced_privacy = "SELF_ONLY"
+        print(f"Forcing privacy level to {forced_privacy} as required for unaudited apps", file=sys.stderr)
+        
+        # Create request payload with required fields parameter
         payload = {
             'post_info': {
                 'title': title,
                 'description': description,
                 'disable_comment': disable_comment,
-                'privacy_level': privacy_level,
+                'privacy_level': forced_privacy,  # Always use SELF_ONLY until app is audited
                 'auto_add_music': auto_add_music
             },
             'source_info': {
@@ -1707,7 +1718,8 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
                 'photo_images': photo_urls
             },
             'post_mode': 'DIRECT_POST',
-            'media_type': 'PHOTO'
+            'media_type': 'PHOTO',
+            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field that was missing
         }
         
         print("Posting photos to TikTok with payload:", file=sys.stderr)
