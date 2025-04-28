@@ -275,7 +275,7 @@
         
         // Function to check the status of the post
         function checkStatus(publishId) {
-            fetch(`/accounts/check-post-status/${publishId}/`)
+            fetch(`/accounts/post/status/${publishId}/`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
