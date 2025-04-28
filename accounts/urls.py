@@ -14,7 +14,7 @@ urlpatterns = [
     path('post/photo/', views.post_photo_view, name='post_photo'),
     path('post/status/<str:publish_id>/', views.check_post_status, name='check_post_status'),
     
-    # Media proxy endpoint
+    # Legacy media proxy endpoint - now Cloudflare Workers handles proxying at https://media.emmanueltech.store/
     path('media/<str:media_id>/<str:filename>', views.proxy_media, name='proxy_media'),
     path('media/test/', views.test_media_endpoint, name='test_media_endpoint'),  # Test endpoint
     

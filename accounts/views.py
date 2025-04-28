@@ -503,11 +503,15 @@ def revoke_token(access_token):
 
 def proxy_media(request, media_id, filename):
     """
-    Proxy endpoint to serve Cloudinary media through our domain
+    Legacy proxy endpoint to serve Cloudinary media through our domain
+    Now primarily redirects to Cloudflare Workers at media.emmanueltech.store
     """
     try:
         print(f"Proxy media request for: {media_id}/{filename}", file=sys.stderr)
         print(f"Request headers: {request.headers}", file=sys.stderr)
+        
+        # Option to redirect to Cloudflare Workers
+        use_redirect = request.GET.get('redirect', 'true').lower() == 'true'
         
         # Clean up media_id - remove any extension if it's present
         if '.' in media_id:
@@ -519,10 +523,29 @@ def proxy_media(request, media_id, filename):
         
         # Determine resource type from filename
         resource_type = "image"  # Default to image
+        is_video = False
         if filename.lower().endswith(('.mp4', '.mov', '.avi', '.wmv')):
             resource_type = "video"
+            is_video = True
         
-        # Get the Cloudinary URL directly
+        # If redirect is enabled, send to Cloudflare Worker
+        if use_redirect:
+            # Create the filename in the format expected by the Cloudflare Worker
+            # For images, the worker expects: image_{fileId}.png
+            # For videos, we need to maintain the extension: video_{fileId}.mp4
+            if is_video:
+                # Extract extension from filename
+                ext = filename.split('.')[-1].lower()
+                cf_filename = f"video_{media_id}.{ext}"
+            else:
+                # For images, always use .png as per the worker code
+                cf_filename = f"image_{media_id}.png"
+                
+            worker_url = f"https://media.emmanueltech.store/{cf_filename}"
+            print(f"Redirecting to Cloudflare Worker URL: {worker_url}", file=sys.stderr)
+            return redirect(worker_url)
+        
+        # Legacy direct serving for backward compatibility
         from cloudinary.utils import cloudinary_url
         
         try:
@@ -892,9 +915,9 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
         
         if not access_token:
             return {'success': False, 'error': 'No access token available. Please log in again.'}
-        
-        # Convert Cloudinary URLs to proxied URLs through our verified domain
-        verified_domain_urls = []
+            
+        # Create verified URLs through Cloudflare Worker
+        verified_urls = []
         for cloudinary_url in photo_urls:
             try:
                 # Extract the public_id from the Cloudinary URL
@@ -909,48 +932,41 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
                 if '.' in media_id:
                     media_id = media_id.split('.')[0]
                 
-                # Determine file extension from URL
-                extension = 'jpg'  # Default to jpg
-                if '.png' in cloudinary_url.lower():
-                    extension = 'png'
-                elif '.webp' in cloudinary_url.lower():
-                    extension = 'webp'
+                # Create filename in the exact format expected by the Cloudflare Worker
+                # The worker expects format: image_{fileId}.png where fileId is the cloudinary ID
+                filename = f"image_{media_id}.png"
                 
-                # Create filename
-                filename = f"image_{media_id}.{extension}"
-                
-                # Create URL through our proxy using the verified domain
-                # Use the domain that TikTok has verified
-                proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
+                # Create URL through Cloudflare Worker using the verified domain
+                worker_url = f"https://media.emmanueltech.store/{filename}"
                 
                 # Test the URL to make sure it's accessible
-                test_response = requests.head(proxied_url, timeout=5)
+                test_response = requests.head(worker_url, timeout=5)
                 status_code = test_response.status_code
-                print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
+                print(f"Testing Cloudflare Worker URL: {worker_url}, status: {status_code}", file=sys.stderr)
                 
-                # If the test fails, try to access the media directly before giving up
+                # If the test fails, try to access the media directly from Cloudinary
                 if status_code != 200:
-                    print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                    print(f"Warning: Cloudflare Worker URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
                     
                     # Test direct Cloudinary URL access
                     cloudinary_test = requests.head(cloudinary_url, timeout=5)
                     if cloudinary_test.status_code == 200:
                         print(f"Using Cloudinary URL directly as fallback: {cloudinary_url}", file=sys.stderr)
-                        verified_domain_urls.append(cloudinary_url)
+                        verified_urls.append(cloudinary_url)
                     else:
-                        print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                        print(f"Both Worker and direct URLs failed, cannot proceed", file=sys.stderr)
                         return {'success': False, 'error': 'Image is not accessible via any URL'}
                 else:
                     # URL test passed, add to verified URLs
-                    verified_domain_urls.append(proxied_url)
-                    print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+                    verified_urls.append(worker_url)
+                    print(f"Using Cloudflare Worker URL: {worker_url}", file=sys.stderr)
                 
             except Exception as e:
                 print(f"Error preparing URL: {str(e)}", file=sys.stderr)
                 return {'success': False, 'error': f'Error preparing media URL: {str(e)}'}
         
         # If we couldn't convert any URLs, fail
-        if not verified_domain_urls:
+        if not verified_urls:
             return {'success': False, 'error': 'Could not create valid media URLs'}
         
         # Prepare API request
@@ -977,11 +993,11 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
             'source_info': {
                 'source': 'PULL_FROM_URL',
                 'photo_cover_index': 0,  # Use first image as cover
-                'photo_images': verified_domain_urls
+                'photo_images': verified_urls
             },
             'post_mode': 'DIRECT_POST',
             'media_type': 'PHOTO',
-            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field that was missing
+            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field
         }
         
         print("Posting photos to TikTok with payload:", file=sys.stderr)
@@ -1661,7 +1677,7 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
         if not access_token:
             return {'success': False, 'error': 'No access token available'}
         
-        # Convert Cloudinary video URL to proxied URL through our verified domain
+        # Create verified URL through Cloudflare Worker
         try:
             # Extract the public_id from the Cloudinary URL
             public_id = extract_public_id_from_url(video_url)
@@ -1675,7 +1691,9 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             if '.' in media_id:
                 media_id = media_id.split('.')[0]
             
-            # Determine file extension from URL
+            # Create filename for Cloudflare Worker - for videos we keep the extension
+            # Since the worker is configured for images with .png, we'll need to adapt for videos
+            # Check if the video extension is in the URL
             extension = 'mp4'  # Default to mp4
             if '.mov' in video_url.lower():
                 extension = 'mov'
@@ -1684,20 +1702,20 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             elif '.wmv' in video_url.lower():
                 extension = 'wmv'
             
-            # Create filename
+            # Create video filename in the expected format for our Cloudflare Worker (video_{fileId}.mp4)
             filename = f"video_{media_id}.{extension}"
             
-            # Create URL through our proxy using the verified domain
-            proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
+            # Create URL through Cloudflare Worker using the verified domain
+            worker_url = f"https://media.emmanueltech.store/{filename}"
             
             # Test the URL to make sure it's accessible
-            test_response = requests.head(proxied_url, timeout=5)
+            test_response = requests.head(worker_url, timeout=5)
             status_code = test_response.status_code
-            print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
+            print(f"Testing Cloudflare Worker URL: {worker_url}, status: {status_code}", file=sys.stderr)
             
             # If the test fails, try to access the media directly before giving up
             if status_code != 200:
-                print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                print(f"Warning: Cloudflare Worker URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
                 
                 # Test direct Cloudinary URL access
                 cloudinary_test = requests.head(video_url, timeout=5)
@@ -1705,12 +1723,12 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
                     print(f"Using Cloudinary URL directly as fallback: {video_url}", file=sys.stderr)
                     verified_video_url = video_url
                 else:
-                    print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                    print(f"Both Worker and direct URLs failed, cannot proceed", file=sys.stderr)
                     return {'success': False, 'error': 'Video is not accessible via any URL'}
             else:
-                # URL test passed, use the proxied URL
-                verified_video_url = proxied_url
-                print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+                # URL test passed, use the worker URL
+                verified_video_url = worker_url
+                print(f"Using Cloudflare Worker URL: {worker_url}", file=sys.stderr)
             
         except Exception as e:
             print(f"Error preparing video URL: {str(e)}", file=sys.stderr)
@@ -1921,8 +1939,8 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
         if not access_token:
             return {'success': False, 'error': 'No access token available'}
         
-        # Convert Cloudinary URLs to proxied URLs through our verified domain
-        verified_domain_urls = []
+        # Create verified URLs through Cloudflare Worker
+        verified_urls = []
         for cloudinary_url in photo_urls:
             try:
                 # Extract the public_id from the Cloudinary URL
@@ -1937,48 +1955,41 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
                 if '.' in media_id:
                     media_id = media_id.split('.')[0]
                 
-                # Determine file extension from URL
-                extension = 'jpg'  # Default to jpg
-                if '.png' in cloudinary_url.lower():
-                    extension = 'png'
-                elif '.webp' in cloudinary_url.lower():
-                    extension = 'webp'
+                # Create filename in the exact format expected by the Cloudflare Worker
+                # The worker expects format: image_{fileId}.png where fileId is the cloudinary ID
+                filename = f"image_{media_id}.png"
                 
-                # Create filename
-                filename = f"image_{media_id}.{extension}"
-                
-                # Create URL through our proxy using the verified domain
-                # Use the domain that TikTok has verified
-                proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
+                # Create URL through Cloudflare Worker using the verified domain
+                worker_url = f"https://media.emmanueltech.store/{filename}"
                 
                 # Test the URL to make sure it's accessible
-                test_response = requests.head(proxied_url, timeout=5)
+                test_response = requests.head(worker_url, timeout=5)
                 status_code = test_response.status_code
-                print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
+                print(f"Testing Cloudflare Worker URL: {worker_url}, status: {status_code}", file=sys.stderr)
                 
-                # If the test fails, try to access the media directly before giving up
+                # If the test fails, try to access the media directly from Cloudinary
                 if status_code != 200:
-                    print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                    print(f"Warning: Cloudflare Worker URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
                     
                     # Test direct Cloudinary URL access
                     cloudinary_test = requests.head(cloudinary_url, timeout=5)
                     if cloudinary_test.status_code == 200:
                         print(f"Using Cloudinary URL directly as fallback: {cloudinary_url}", file=sys.stderr)
-                        verified_domain_urls.append(cloudinary_url)
+                        verified_urls.append(cloudinary_url)
                     else:
-                        print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                        print(f"Both Worker and direct URLs failed, cannot proceed", file=sys.stderr)
                         return {'success': False, 'error': 'Image is not accessible via any URL'}
                 else:
                     # URL test passed, add to verified URLs
-                    verified_domain_urls.append(proxied_url)
-                    print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+                    verified_urls.append(worker_url)
+                    print(f"Using Cloudflare Worker URL: {worker_url}", file=sys.stderr)
                 
             except Exception as e:
                 print(f"Error preparing URL: {str(e)}", file=sys.stderr)
                 return {'success': False, 'error': f'Error preparing media URL: {str(e)}'}
         
         # If we couldn't convert any URLs, fail
-        if not verified_domain_urls:
+        if not verified_urls:
             return {'success': False, 'error': 'Could not create valid media URLs'}
         
         # Prepare API request
@@ -2005,11 +2016,11 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
             'source_info': {
                 'source': 'PULL_FROM_URL',
                 'photo_cover_index': 0,  # Use first image as cover
-                'photo_images': verified_domain_urls
+                'photo_images': verified_urls
             },
             'post_mode': 'DIRECT_POST',
             'media_type': 'PHOTO',
-            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field that was missing
+            'fields': ['open_id', 'avatar_url', 'display_name'] # Required field
         }
         
         print("Posting photos to TikTok with payload:", file=sys.stderr)
@@ -2040,6 +2051,9 @@ def test_media_endpoint(request):
     Test endpoint to check if the media serving is working correctly
     """
     try:
+        # Generate a test ID
+        test_id = "test-image"
+        
         # Return a simple JSON response with information about the request
         response_data = {
             'message': 'Media endpoint is working',
@@ -2048,7 +2062,11 @@ def test_media_endpoint(request):
             'request_path': request.path,
             'server_hostname': request.get_host(),
             'scheme': request.scheme,
-            'example_url': f"{request.scheme}://{request.get_host()}/accounts/media/test-image/image.jpg"
+            'legacy_url': f"{request.scheme}://{request.get_host()}/accounts/media/{test_id}/image.jpg",
+            'cloudflare_worker_url': f"https://media.emmanueltech.store/image_{test_id}.png",
+            'cloudflare_worker_video_url': f"https://media.emmanueltech.store/video_{test_id}.mp4",
+            'note': "Media is now primarily served through Cloudflare Workers at media.emmanueltech.store",
+            'worker_format': "For images: image_{fileId}.png, for videos: video_{fileId}.{extension}"
         }
         
         # Log the request info
