@@ -723,8 +723,9 @@ def post_photo_view(request):
                             # Since the post was published successfully, we can delete the media from Cloudinary
                             if cloudinary_public_id:
                                 try:
-                                    delete_media(cloudinary_public_id, resource_type="image")
-                                    print(f"Successfully deleted Cloudinary media after TikTok post: {cloudinary_public_id}", file=sys.stderr)
+                                    # Commenting out deletion to ensure TikTok can access the image
+                                    # delete_media(cloudinary_public_id, resource_type="image")
+                                    print(f"Keeping Cloudinary media to ensure TikTok can access it: {cloudinary_public_id}", file=sys.stderr)
                                 except Exception as e:
                                     print(f"Error deleting Cloudinary media after successful post: {str(e)}", file=sys.stderr)
                                 
@@ -1354,10 +1355,12 @@ def delete_scheduled_post(request, post_id):
             cloudinary_deleted = False
             if post.cloudinary_public_id:
                 try:
-                    delete_media(post.cloudinary_public_id, resource_type="image")
-                    cloudinary_deleted = True
+                    # Commenting out deletion to ensure TikTok can access the image
+                    # delete_media(post.cloudinary_public_id, resource_type="image")
+                    print(f"Keeping Cloudinary media to ensure TikTok can access it: {post.cloudinary_public_id}", file=sys.stderr)
+                    cloudinary_deleted = False  # Set to false since we're not deleting
                 except Exception as e:
-                    print(f"Error deleting Cloudinary media for post {post.id}: {str(e)}", file=sys.stderr)
+                    print(f"Error processing Cloudinary media for post {post.id}: {str(e)}", file=sys.stderr)
             
             # Delete post from database
             post.delete()
@@ -1498,8 +1501,9 @@ def process_scheduled_posts():
                         # Delete Cloudinary media now that it's successfully published
                         if post.cloudinary_public_id:
                             try:
-                                delete_media(post.cloudinary_public_id, resource_type="image")
-                                post.cloudinary_public_id = ''  # Clear the public_id after deletion
+                                # Commenting out deletion to ensure TikTok can access the image
+                                # delete_media(post.cloudinary_public_id, resource_type="image")
+                                print(f"Keeping Cloudinary media to ensure TikTok can access it: {post.cloudinary_public_id}", file=sys.stderr)
                             except Exception as cloud_error:
                                 print(f"Error deleting Cloudinary media for post {post.id}: {str(cloud_error)}", file=sys.stderr)
                         
