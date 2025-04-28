@@ -51,13 +51,13 @@ def upload_media(file, resource_type="auto"):
         # Re-raise to let the caller handle it
         raise
 
-def delete_media(public_id, resource_type="auto"):
+def delete_media(public_id, resource_type="image"):
     """
     Delete a file from Cloudinary
     
     Args:
         public_id: Cloudinary public ID of the resource
-        resource_type: Type of resource (auto, image, video, raw)
+        resource_type: Type of resource (image, video, raw)
         
     Returns:
         Dictionary containing deletion result

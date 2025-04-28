@@ -14,6 +14,9 @@ urlpatterns = [
     path('post/photo/', views.post_photo_view, name='post_photo'),
     path('post/status/<str:publish_id>/', views.check_post_status, name='check_post_status'),
     
+    # Media proxy endpoint
+    path('media/<str:media_id>/<str:filename>', views.proxy_media, name='proxy_media'),
+    
     # New Video Scheduling Routes
     path('post/video/', views.schedule_video_view, name='schedule_video'),
     path('scheduled/', views.scheduled_posts_view, name='scheduled_posts'),

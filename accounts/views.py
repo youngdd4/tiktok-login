@@ -478,6 +478,30 @@ def revoke_token(access_token):
         print(f"Error revoking token: {str(e)}", file=sys.stderr)
         return False
 
+def proxy_media(request, media_id, filename):
+    """
+    Proxy endpoint to serve Cloudinary media through our domain
+    """
+    try:
+        # Construct Cloudinary URL
+        public_id = f"tiktok_media/{media_id}"
+        
+        # Get resource info from Cloudinary to check if it exists
+        from cloudinary.api import resource
+        try:
+            resource_info = resource(public_id, resource_type="image")
+            media_url = resource_info.get('secure_url')
+        except Exception as e:
+            print(f"Error fetching resource from Cloudinary: {str(e)}", file=sys.stderr)
+            return HttpResponse("Media not found", status=404)
+        
+        # Redirect to the Cloudinary URL
+        # This is more efficient than downloading and re-serving the file
+        return redirect(media_url)
+    except Exception as e:
+        print(f"Error in proxy_media: {str(e)}", file=sys.stderr)
+        return HttpResponse("Media not found", status=404)
+
 @tiktok_login_required
 def post_photo_view(request):
     """
@@ -528,8 +552,30 @@ def post_photo_view(request):
                     upload_result = upload_media(uploaded_file, resource_type="image")
                     file_url = upload_result.get('secure_url')
                     cloudinary_public_id = upload_result.get('public_id')
-                    photo_urls.append(file_url)
+                    
+                    # Instead of using Cloudinary URL directly, create a proxy URL through our domain
+                    # Extract the media ID from the public_id (after the last /)
+                    media_id = cloudinary_public_id.split('/')[-1]
+                    # Get file extension from original filename or from content_type
+                    extension = uploaded_file.name.split('.')[-1].lower()
+                    if extension not in ['jpg', 'jpeg', 'png', 'webp']:
+                        if uploaded_file.content_type == 'image/jpeg':
+                            extension = 'jpg'
+                        elif uploaded_file.content_type == 'image/png':
+                            extension = 'png'
+                        elif uploaded_file.content_type == 'image/webp':
+                            extension = 'webp'
+                        else:
+                            extension = 'jpg'  # Default to jpg if we can't determine
+                    
+                    # Create proxied URL through our domain
+                    host = request.get_host()
+                    scheme = request.scheme
+                    proxied_url = f"{scheme}://{host}/accounts/media/{media_id}/{secure_filename(uploaded_file.name)}"
+                    photo_urls.append(proxied_url)
+                    
                     print(f"Cloudinary upload success: {file_url}, public_id: {cloudinary_public_id}", file=sys.stderr)
+                    print(f"Proxied URL: {proxied_url}", file=sys.stderr)
                 except Exception as e:
                     print(f"Cloudinary upload error: {str(e)}", file=sys.stderr)
                     context['error'] = f'Error uploading to cloud storage: {str(e)}'
@@ -544,8 +590,26 @@ def post_photo_view(request):
                         context['error'] = 'Invalid photo URL format. URL must end with .jpg, .jpeg, .png, or .webp'
                         return render(request, 'accounts/post_photo.html', context)
                     
-                    photo_urls.append(photo_url)
-                    print(f"Using photo URL: {photo_url}", file=sys.stderr)
+                    # For URL cases, we need to first download and re-upload to Cloudinary
+                    # Then serve via our proxy
+                    try:
+                        # Download and upload to Cloudinary
+                        upload_result = upload_media(photo_url, resource_type="image")
+                        cloudinary_public_id = upload_result.get('public_id')
+                        
+                        # Create proxied URL 
+                        media_id = cloudinary_public_id.split('/')[-1]
+                        filename = photo_url.split('/')[-1]
+                        host = request.get_host()
+                        scheme = request.scheme
+                        proxied_url = f"{scheme}://{host}/accounts/media/{media_id}/{secure_filename(filename)}"
+                        photo_urls.append(proxied_url)
+                        
+                        print(f"Downloaded and re-uploaded URL: {photo_url}", file=sys.stderr)
+                        print(f"Proxied URL: {proxied_url}", file=sys.stderr)
+                    except Exception as e:
+                        context['error'] = f'Error processing external URL: {str(e)}'
+                        return render(request, 'accounts/post_photo.html', context)
             
             # Basic validation
             if not title:
@@ -594,7 +658,7 @@ def post_photo_view(request):
                             
                             # Since the post was published successfully, we can delete the media from Cloudinary
                             if cloudinary_public_id:
-                                delete_media(cloudinary_public_id)
+                                delete_media(cloudinary_public_id, resource_type="image")
                                 
                         except Exception as e:
                             print(f"Error saving post record: {str(e)}", file=sys.stderr)
@@ -603,7 +667,7 @@ def post_photo_view(request):
                     context['error'] = result.get('error', 'An unknown error occurred')
                     # If posting failed, delete the media from Cloudinary
                     if cloudinary_public_id:
-                        delete_media(cloudinary_public_id)
+                        delete_media(cloudinary_public_id, resource_type="image")
             
             except Exception as e:
                 print(f"Error posting photo: {str(e)}", file=sys.stderr)
@@ -611,7 +675,7 @@ def post_photo_view(request):
                 
                 # If posting failed, delete the media from Cloudinary
                 if cloudinary_public_id:
-                    delete_media(cloudinary_public_id)
+                    delete_media(cloudinary_public_id, resource_type="image")
         
         # Query creator info to get available privacy levels
         access_token = request.session.get('tiktok_access_token')
@@ -1116,7 +1180,7 @@ def delete_scheduled_post(request, post_id):
             cloudinary_deleted = False
             if post.cloudinary_public_id:
                 try:
-                    delete_media(post.cloudinary_public_id)
+                    delete_media(post.cloudinary_public_id, resource_type="image")
                     cloudinary_deleted = True
                 except Exception as e:
                     print(f"Error deleting Cloudinary media for post {post.id}: {str(e)}", file=sys.stderr)
@@ -1261,7 +1325,7 @@ def process_scheduled_posts():
                         # Delete Cloudinary media now that it's successfully published
                         if post.cloudinary_public_id:
                             try:
-                                delete_media(post.cloudinary_public_id)
+                                delete_media(post.cloudinary_public_id, resource_type="image")
                                 post.cloudinary_public_id = ''  # Clear the public_id after deletion
                             except Exception as cloud_error:
                                 print(f"Error deleting Cloudinary media for post {post.id}: {str(cloud_error)}", file=sys.stderr)

@@ -87,14 +87,14 @@ class ScheduledPost(models.Model):
         
         if self.cloudinary_public_id:
             # If we have stored the public_id directly
-            delete_media(self.cloudinary_public_id)
+            delete_media(self.cloudinary_public_id, resource_type="image")
             self.cloudinary_public_id = ''
             self.save(update_fields=['cloudinary_public_id'])
         elif self.media_url and 'res.cloudinary.com' in self.media_url:
             # Try to extract public_id from URL if we don't have it stored
             public_id = extract_public_id_from_url(self.media_url)
             if public_id:
-                delete_media(public_id)
+                delete_media(public_id, resource_type="image")
 
 class PostAnalytics(models.Model):
     post = models.OneToOneField(ScheduledPost, on_delete=models.CASCADE, related_name='analytics')
