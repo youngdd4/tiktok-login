@@ -522,65 +522,85 @@ def proxy_media(request, media_id, filename):
         if filename.lower().endswith(('.mp4', '.mov', '.avi', '.wmv')):
             resource_type = "video"
         
-        # Get resource info from Cloudinary to check if it exists
-        from cloudinary.api import resource
-        media_url = None
+        # Get the Cloudinary URL directly
+        from cloudinary.utils import cloudinary_url
         
         try:
-            # Try primary resource type
-            resource_info = resource(public_id, resource_type=resource_type)
-            media_url = resource_info.get('secure_url')
-            print(f"Found media with primary resource type {resource_type}: {media_url}", file=sys.stderr)
+            # Get Cloudinary URL for the resource
+            url, options = cloudinary_url(public_id, resource_type=resource_type, secure=True)
+            print(f"Generated Cloudinary URL: {url}", file=sys.stderr)
             
-        except Exception as primary_error:
-            print(f"Error with primary resource type: {str(primary_error)}", file=sys.stderr)
-            # If not found with specified resource type, try the other type
+            # Fetch the content from Cloudinary
+            response = requests.get(url, stream=True)
+            
+            if response.status_code != 200:
+                print(f"Error fetching from Cloudinary: {response.status_code}", file=sys.stderr)
+                return HttpResponse(f"Error fetching media: {response.status_code}", status=response.status_code)
+            
+            # Get content type
+            content_type = response.headers.get('Content-Type', 'application/octet-stream')
+            
+            # Create a Django response with the content
+            django_response = HttpResponse(content_type=content_type)
+            
+            # Copy the content
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    django_response.write(chunk)
+            
+            # Add cache headers
+            django_response['Cache-Control'] = 'max-age=86400, public'  # Cache for a day
+            
+            # Add CORS headers to ensure TikTok can access
+            django_response['Access-Control-Allow-Origin'] = '*'
+            django_response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            django_response['Access-Control-Allow-Headers'] = 'Origin, Content-Type, Accept'
+            
+            print(f"Successfully serving media for {public_id}", file=sys.stderr)
+            return django_response
+            
+        except Exception as e:
+            print(f"Error with Cloudinary: {str(e)}", file=sys.stderr)
+            # Try alternative approach using Cloudinary API directly
             try:
-                alt_resource_type = "video" if resource_type == "image" else "image"
-                resource_info = resource(public_id, resource_type=alt_resource_type)
-                media_url = resource_info.get('secure_url')
-                resource_type = alt_resource_type
-                print(f"Found media with alternate resource type {resource_type}: {media_url}", file=sys.stderr)
-            except Exception as alt_error:
-                print(f"Error with alternate resource type: {str(alt_error)}", file=sys.stderr)
-        
-        if not media_url:
-            print(f"No media URL found for {public_id}", file=sys.stderr)
-            return HttpResponse("Media not found", status=404)
+                from cloudinary.api import resource
+                resource_info = resource(public_id, resource_type=resource_type)
+                cloudinary_url = resource_info.get('secure_url')
                 
-        # Fetch the actual media content
-        print(f"Fetching media content from: {media_url}", file=sys.stderr)
-        media_response = requests.get(media_url, stream=True)
-        
-        if media_response.status_code != 200:
-            print(f"Error fetching media: {media_response.status_code}", file=sys.stderr)
-            return HttpResponse(f"Error fetching media: {media_response.status_code}", status=media_response.status_code)
-        
-        # Get content type from Cloudinary resource or from response
-        if resource_type == 'image':
-            content_type = media_response.headers.get('Content-Type', 'image/jpeg')
-        else:  # video
-            content_type = media_response.headers.get('Content-Type', 'video/mp4')
-        
-        print(f"Media content type: {content_type}", file=sys.stderr)
-        
-        # Stream the response content
-        response = HttpResponse(
-            streaming_content=media_response.iter_content(chunk_size=8192),
-            content_type=content_type
-        )
-        
-        # Set cache headers
-        response['Cache-Control'] = 'max-age=86400, public'  # Cache for a day
-        
-        # Add CORS headers to ensure TikTok can access
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Origin, Content-Type, Accept'
-        
-        print(f"Successfully serving media for {public_id}", file=sys.stderr)
-        return response
-            
+                if cloudinary_url:
+                    # Redirect to the Cloudinary URL through our domain
+                    response = requests.get(cloudinary_url, stream=True)
+                    
+                    if response.status_code != 200:
+                        return HttpResponse(f"Error fetching media: {response.status_code}", status=response.status_code)
+                    
+                    # Get content type
+                    content_type = response.headers.get('Content-Type', 'application/octet-stream')
+                    
+                    # Create a Django response with the content
+                    django_response = HttpResponse(content_type=content_type)
+                    
+                    # Copy the content
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            django_response.write(chunk)
+                    
+                    # Add cache headers
+                    django_response['Cache-Control'] = 'max-age=86400, public'  # Cache for a day
+                    
+                    # Add CORS headers to ensure TikTok can access
+                    django_response['Access-Control-Allow-Origin'] = '*'
+                    django_response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+                    django_response['Access-Control-Allow-Headers'] = 'Origin, Content-Type, Accept'
+                    
+                    print(f"Successfully serving media (alt method) for {public_id}", file=sys.stderr)
+                    return django_response
+                else:
+                    return HttpResponse("Media URL not found", status=404)
+            except Exception as alt_error:
+                print(f"Error with alternative method: {str(alt_error)}", file=sys.stderr)
+                return HttpResponse(f"Media not found: {str(alt_error)}", status=404)
+                
     except Exception as e:
         print(f"Error in proxy_media: {str(e)}", file=sys.stderr)
         return HttpResponse(f"Media not found: {str(e)}", status=404)
@@ -899,32 +919,35 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
                 # Create filename
                 filename = f"image_{media_id}.{extension}"
                 
-                # IMPORTANT: Always use the verified domain for TikTok
-                # The domain must match exactly what's in your TikTok Developer Console
+                # Create URL through our proxy using the verified domain
+                # Use the domain that TikTok has verified
                 proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
                 
-                # Test URL accessibility before adding - this helps detect issues early
-                try:
-                    test_response = requests.head(proxied_url, timeout=5)
-                    if test_response.status_code != 200:
-                        print(f"Warning: URL not accessible: {proxied_url}, status: {test_response.status_code}", file=sys.stderr)
-                        # Try alternative URL format
-                        alt_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
-                        alt_test = requests.head(alt_url, timeout=5)
-                        if alt_test.status_code == 200:
-                            proxied_url = alt_url
-                            print(f"Using alternative URL: {proxied_url}", file=sys.stderr)
-                        else:
-                            print(f"Both URL formats failed, proceeding with original format", file=sys.stderr)
-                except Exception as test_error:
-                    print(f"Warning: Could not test URL accessibility: {str(test_error)}", file=sys.stderr)
+                # Test the URL to make sure it's accessible
+                test_response = requests.head(proxied_url, timeout=5)
+                status_code = test_response.status_code
+                print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
                 
-                verified_domain_urls.append(proxied_url)
-                print(f"Converted Cloudinary URL: {cloudinary_url}", file=sys.stderr)
-                print(f"To verified domain URL: {proxied_url}", file=sys.stderr)
+                # If the test fails, try to access the media directly before giving up
+                if status_code != 200:
+                    print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                    
+                    # Test direct Cloudinary URL access
+                    cloudinary_test = requests.head(cloudinary_url, timeout=5)
+                    if cloudinary_test.status_code == 200:
+                        print(f"Using Cloudinary URL directly as fallback: {cloudinary_url}", file=sys.stderr)
+                        verified_domain_urls.append(cloudinary_url)
+                    else:
+                        print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                        return {'success': False, 'error': 'Image is not accessible via any URL'}
+                else:
+                    # URL test passed, add to verified URLs
+                    verified_domain_urls.append(proxied_url)
+                    print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+                
             except Exception as e:
-                print(f"Error converting URL: {str(e)}", file=sys.stderr)
-                return {'success': False, 'error': f'Error converting media URL: {str(e)}'}
+                print(f"Error preparing URL: {str(e)}", file=sys.stderr)
+                return {'success': False, 'error': f'Error preparing media URL: {str(e)}'}
         
         # If we couldn't convert any URLs, fail
         if not verified_domain_urls:
@@ -1664,14 +1687,34 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             # Create filename
             filename = f"video_{media_id}.{extension}"
             
-            # Always use the verified domain for production
-            verified_video_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
+            # Create URL through our proxy using the verified domain
+            proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
             
-            print(f"Converted Cloudinary URL: {video_url}", file=sys.stderr)
-            print(f"To verified domain URL: {verified_video_url}", file=sys.stderr)
+            # Test the URL to make sure it's accessible
+            test_response = requests.head(proxied_url, timeout=5)
+            status_code = test_response.status_code
+            print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
+            
+            # If the test fails, try to access the media directly before giving up
+            if status_code != 200:
+                print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                
+                # Test direct Cloudinary URL access
+                cloudinary_test = requests.head(video_url, timeout=5)
+                if cloudinary_test.status_code == 200:
+                    print(f"Using Cloudinary URL directly as fallback: {video_url}", file=sys.stderr)
+                    verified_video_url = video_url
+                else:
+                    print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                    return {'success': False, 'error': 'Video is not accessible via any URL'}
+            else:
+                # URL test passed, use the proxied URL
+                verified_video_url = proxied_url
+                print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+            
         except Exception as e:
-            print(f"Error converting video URL: {str(e)}", file=sys.stderr)
-            return {'success': False, 'error': f'Error converting video URL: {str(e)}'}
+            print(f"Error preparing video URL: {str(e)}", file=sys.stderr)
+            return {'success': False, 'error': f'Error preparing video URL: {str(e)}'}
         
         # Prepare API request
         video_init_url = "https://open.tiktokapis.com/v2/post/publish/video/init/"
@@ -1697,7 +1740,8 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             'source_info': {
                 'source': 'PULL_FROM_URL',
                 'video_url': verified_video_url
-            }
+            },
+            'fields': ['open_id', 'avatar_url', 'display_name']  # Add required fields parameter
         }
         
         print("Posting video to TikTok with payload:", file=sys.stderr)
@@ -1903,32 +1947,35 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
                 # Create filename
                 filename = f"image_{media_id}.{extension}"
                 
-                # IMPORTANT: Always use the verified domain for TikTok
-                # The domain must match exactly what's in your TikTok Developer Console
+                # Create URL through our proxy using the verified domain
+                # Use the domain that TikTok has verified
                 proxied_url = f"https://www.emmanueltech.store/accounts/media/{media_id}/{filename}"
                 
-                # Test URL accessibility before adding - this helps detect issues early
-                try:
-                    test_response = requests.head(proxied_url, timeout=5)
-                    if test_response.status_code != 200:
-                        print(f"Warning: URL not accessible: {proxied_url}, status: {test_response.status_code}", file=sys.stderr)
-                        # Try alternative URL format
-                        alt_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
-                        alt_test = requests.head(alt_url, timeout=5)
-                        if alt_test.status_code == 200:
-                            proxied_url = alt_url
-                            print(f"Using alternative URL: {proxied_url}", file=sys.stderr)
-                        else:
-                            print(f"Both URL formats failed, proceeding with original format", file=sys.stderr)
-                except Exception as test_error:
-                    print(f"Warning: Could not test URL accessibility: {str(test_error)}", file=sys.stderr)
+                # Test the URL to make sure it's accessible
+                test_response = requests.head(proxied_url, timeout=5)
+                status_code = test_response.status_code
+                print(f"Testing proxied URL: {proxied_url}, status: {status_code}", file=sys.stderr)
                 
-                verified_domain_urls.append(proxied_url)
-                print(f"Converted Cloudinary URL: {cloudinary_url}", file=sys.stderr)
-                print(f"To verified domain URL: {proxied_url}", file=sys.stderr)
+                # If the test fails, try to access the media directly before giving up
+                if status_code != 200:
+                    print(f"Warning: Proxied URL not accessible. Will try direct Cloudinary URL.", file=sys.stderr)
+                    
+                    # Test direct Cloudinary URL access
+                    cloudinary_test = requests.head(cloudinary_url, timeout=5)
+                    if cloudinary_test.status_code == 200:
+                        print(f"Using Cloudinary URL directly as fallback: {cloudinary_url}", file=sys.stderr)
+                        verified_domain_urls.append(cloudinary_url)
+                    else:
+                        print(f"Both proxy and direct URLs failed, cannot proceed", file=sys.stderr)
+                        return {'success': False, 'error': 'Image is not accessible via any URL'}
+                else:
+                    # URL test passed, add to verified URLs
+                    verified_domain_urls.append(proxied_url)
+                    print(f"Using proxied URL: {proxied_url}", file=sys.stderr)
+                
             except Exception as e:
-                print(f"Error converting URL: {str(e)}", file=sys.stderr)
-                return {'success': False, 'error': f'Error converting media URL: {str(e)}'}
+                print(f"Error preparing URL: {str(e)}", file=sys.stderr)
+                return {'success': False, 'error': f'Error preparing media URL: {str(e)}'}
         
         # If we couldn't convert any URLs, fail
         if not verified_domain_urls:
