@@ -491,6 +491,10 @@ def post_photo_view(request):
         
         # Handle form submission
         if request.method == 'POST':
+            # Debug POST data
+            print(f"POST data: {request.POST}", file=sys.stderr)
+            print(f"FILES data: {request.FILES}", file=sys.stderr)
+            
             # Get form data
             title = request.POST.get('title', '')
             description = request.POST.get('description', '')
@@ -506,6 +510,7 @@ def post_photo_view(request):
             if 'photos' in request.FILES:
                 # Get the uploaded file (only one allowed)
                 uploaded_file = request.FILES['photos']
+                print(f"Received file: {uploaded_file.name}, size: {uploaded_file.size}, type: {uploaded_file.content_type}", file=sys.stderr)
                 
                 # Validate file type
                 if not uploaded_file.content_type in ['image/jpeg', 'image/png', 'image/webp']:
@@ -519,18 +524,23 @@ def post_photo_view(request):
                 
                 # Upload to Cloudinary
                 try:
+                    print(f"Uploading to Cloudinary: {uploaded_file.name}", file=sys.stderr)
                     upload_result = upload_media(uploaded_file, resource_type="image")
                     file_url = upload_result.get('secure_url')
                     cloudinary_public_id = upload_result.get('public_id')
                     photo_urls.append(file_url)
+                    print(f"Cloudinary upload success: {file_url}, public_id: {cloudinary_public_id}", file=sys.stderr)
                 except Exception as e:
+                    print(f"Cloudinary upload error: {str(e)}", file=sys.stderr)
                     context['error'] = f'Error uploading to cloud storage: {str(e)}'
                     return render(request, 'accounts/post_photo.html', context)
             else:
+                print("No file uploaded, checking for URL", file=sys.stderr)
                 # Fall back to URL-based uploads
                 photo_url = request.POST.get('photo_url', '').strip()
                 if photo_url:
                     photo_urls.append(photo_url)
+                    print(f"Using photo URL: {photo_url}", file=sys.stderr)
             
             # Basic validation
             if not photo_urls:

@@ -251,6 +251,10 @@
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('progress-bar');
         const form = document.getElementById('photo-form');
+        const statusBox = document.getElementById('status-box');
+        const statusText = statusBox ? document.getElementById('status-text') : null;
+        const statusDetails = statusBox ? document.getElementById('status-details') : null;
+        const publishId = {% if publish_id %}'{{ publish_id }}'{% else %}null{% endif %};
         
         // Maximum file size in bytes (20MB)
         const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -259,6 +263,47 @@
         
         // Current uploaded file
         let uploadedFile = null;
+        
+        // Check status if we have a publish ID
+        if (publishId && statusText) {
+            checkStatus(publishId);
+        }
+        
+        // Function to check the status of the post
+        function checkStatus(publishId) {
+            fetch(`/accounts/check-post-status/${publishId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.status === 'PUBLISH_DONE') {
+                            statusText.textContent = 'Published ✓';
+                            statusText.style.color = '#4caf50';
+                        } else if (data.status === 'PUBLISH_FAILED') {
+                            statusText.textContent = 'Failed ✗';
+                            statusText.style.color = '#f44336';
+                            if (data.error && data.error.message) {
+                                statusDetails.textContent = `Error: ${data.error.message}`;
+                            }
+                        } else if (data.status === 'PUBLISHING') {
+                            statusText.textContent = 'Processing...';
+                            // Check again after 5 seconds
+                            setTimeout(() => checkStatus(publishId), 5000);
+                        } else {
+                            statusText.textContent = data.status || 'Unknown';
+                            // Check again after 5 seconds
+                            setTimeout(() => checkStatus(publishId), 5000);
+                        }
+                    } else {
+                        statusText.textContent = 'Error checking status';
+                        statusDetails.textContent = data.error || 'Unknown error';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking post status:', error);
+                    statusText.textContent = 'Error';
+                    statusDetails.textContent = 'Failed to check status';
+                });
+        }
         
         // Handle click on the upload button
         dropArea.querySelector('.upload-btn').addEventListener('click', function(e) {
@@ -376,35 +421,22 @@
         
         // Handle form submission
         form.addEventListener('submit', function(e) {
-            e.preventDefault();
+            // Don't prevent default to allow actual form submission
             
-            // Validate that we have a file
-            if (!uploadedFile) {
-                showError('Please upload a photo');
+            // Check if we have a file or URL
+            const photoUrl = document.getElementById('photo_url').value.trim();
+            if (!uploadedFile && !photoUrl) {
+                e.preventDefault();
+                showError('Please either upload a photo or provide a photo URL');
                 return;
             }
             
-            // Simulate upload progress
+            // Show progress indicator for UI feedback only
             progressContainer.style.display = 'block';
-            progressBar.style.width = '0%';
+            progressBar.style.width = '100%';
             
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 5;
-                progressBar.style.width = `${progress}%`;
-                
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    // Show success message
-                    const successMessage = document.createElement('div');
-                    successMessage.className = 'alert alert-success';
-                    successMessage.innerHTML = 'Your photo has been uploaded! (This is just a UI demo, no actual upload occurred)';
-                    form.parentNode.insertBefore(successMessage, form);
-                    
-                    // Hide form
-                    form.style.display = 'none';
-                }
-            }, 100);
+            // Let the form submit naturally to the server
+            // The backend will handle the file upload to Cloudinary
         });
     });
     </script>

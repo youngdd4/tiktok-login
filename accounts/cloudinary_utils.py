@@ -3,6 +3,7 @@ import cloudinary.uploader
 import cloudinary.api
 from django.core.files.uploadedfile import UploadedFile, InMemoryUploadedFile
 import uuid
+import sys
 
 def upload_media(file, resource_type="auto"):
     """
@@ -18,25 +19,37 @@ def upload_media(file, resource_type="auto"):
         - secure_url: HTTPS URL to the resource
         - resource_type: Type of resource detected
     """
-    if isinstance(file, (UploadedFile, InMemoryUploadedFile)):
-        # Generate a unique public_id
-        public_id = f"tiktok_media/{uuid.uuid4()}"
+    try:
+        print(f"Upload_media called with file type: {type(file)}, resource_type: {resource_type}", file=sys.stderr)
         
-        # Upload to cloudinary
-        result = cloudinary.uploader.upload(
-            file,
-            public_id=public_id,
-            resource_type=resource_type,
-            overwrite=True
-        )
-        return result
-    else:
-        # For URL or file path
-        return cloudinary.uploader.upload(
-            file,
-            resource_type=resource_type,
-            overwrite=True
-        )
+        if isinstance(file, (UploadedFile, InMemoryUploadedFile)):
+            # Generate a unique public_id
+            public_id = f"tiktok_media/{uuid.uuid4()}"
+            print(f"Uploading with public_id: {public_id}", file=sys.stderr)
+            
+            # Upload to cloudinary
+            result = cloudinary.uploader.upload(
+                file,
+                public_id=public_id,
+                resource_type=resource_type,
+                overwrite=True
+            )
+            print(f"Cloudinary upload successful: {result.get('public_id')}", file=sys.stderr)
+            return result
+        else:
+            # For URL or file path
+            print(f"Uploading from URL or path", file=sys.stderr)
+            result = cloudinary.uploader.upload(
+                file,
+                resource_type=resource_type,
+                overwrite=True
+            )
+            print(f"Cloudinary URL upload successful: {result.get('public_id')}", file=sys.stderr)
+            return result
+    except Exception as e:
+        print(f"Error in upload_media: {str(e)}", file=sys.stderr)
+        # Re-raise to let the caller handle it
+        raise
 
 def delete_media(public_id, resource_type="auto"):
     """
@@ -49,7 +62,14 @@ def delete_media(public_id, resource_type="auto"):
     Returns:
         Dictionary containing deletion result
     """
-    return cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+    try:
+        print(f"Deleting media with public_id: {public_id}", file=sys.stderr)
+        result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+        print(f"Deletion result: {result}", file=sys.stderr)
+        return result
+    except Exception as e:
+        print(f"Error deleting media from Cloudinary: {str(e)}", file=sys.stderr)
+        raise
 
 def get_resource_info(public_id, resource_type="auto"):
     """
