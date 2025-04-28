@@ -506,6 +506,10 @@ def proxy_media(request, media_id, filename):
     Proxy endpoint to serve Cloudinary media through our domain
     """
     try:
+        # Clean up media_id - remove any extension if it's present
+        if '.' in media_id:
+            media_id = media_id.split('.')[0]
+            
         # Construct Cloudinary public ID
         public_id = f"tiktok_media/{media_id}"
         
@@ -863,6 +867,10 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
                 # Create a media ID (just the last part of the public_id)
                 media_id = public_id.split('/')[-1]
                 
+                # Remove any file extension from media_id 
+                if '.' in media_id:
+                    media_id = media_id.split('.')[0]
+                
                 # Determine file extension from URL
                 extension = 'jpg'  # Default to jpg
                 if '.png' in cloudinary_url.lower():
@@ -882,7 +890,7 @@ def post_photos_to_tiktok(request, title, description, photo_urls, privacy_level
                     # For local development, use the current host
                     proxied_url = f"{scheme}://{host}/accounts/media/{media_id}/{filename}"
                 else:
-                    # For production, use verified domain
+                    # For production, use verified domain - with corrected URL format
                     proxied_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
                 
                 verified_domain_urls.append(proxied_url)
@@ -970,26 +978,51 @@ def check_post_status(request, publish_id):
     }
     
     try:
+        print(f"Checking status for publish_id: {publish_id}", file=sys.stderr)
         response = requests.post(status_url, headers=headers, json=payload)
         print(f"Status check response: {response.status_code}", file=sys.stderr)
         print(f"Status check content: {response.text}", file=sys.stderr)
         
         if response.status_code == 200:
             data = response.json()
-            return JsonResponse({
-                'success': True,
-                'status': data.get('data', {}).get('status'),
-                'error': data.get('error', {})
-            })
+            status = data.get('data', {}).get('status')
+            error_code = data.get('error', {}).get('code')
+            error_message = data.get('error', {}).get('message')
+            
+            if status:
+                print(f"Post status: {status}", file=sys.stderr)
+                # Interpret status for user-friendly message
+                status_message = {
+                    'PUBLISH_PREPARING': 'TikTok is preparing your post...',
+                    'PUBLISH_RUNNING': 'TikTok is processing your post...',
+                    'PUBLISH_FAILED': 'Post failed: ' + error_message if error_message else 'Post failed',
+                    'PUBLISH_DONE': 'Your post has been published successfully!'
+                }.get(status, status)
+                
+                return JsonResponse({
+                    'success': True,
+                    'status': status,
+                    'status_message': status_message,
+                    'error_code': error_code,
+                    'error_message': error_message
+                })
+            else:
+                # If no status, still try to extract information from the response
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Status check returned no status: {data}",
+                    'error_code': error_code,
+                    'error_message': error_message
+                })
         
         return JsonResponse({
             'success': False,
-            'error': f"Status check failed: {response.status_code}"
+            'error': f"Status check failed with code {response.status_code}: {response.text}"
         })
     
     except Exception as e:
         print(f"Error checking post status: {str(e)}", file=sys.stderr)
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': f"Error: {str(e)}"})
 
 @tiktok_login_required
 def schedule_video_view(request):
@@ -1586,6 +1619,10 @@ def post_video_to_tiktok(user_id, title, video_url, privacy_level, disable_comme
             # Create a media ID (just the last part of the public_id)
             media_id = public_id.split('/')[-1]
             
+            # Remove any file extension from media_id 
+            if '.' in media_id:
+                media_id = media_id.split('.')[0]
+            
             # Determine file extension from URL
             extension = 'mp4'  # Default to mp4
             if '.mov' in video_url.lower():
@@ -1823,6 +1860,10 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
                 # Create a media ID (just the last part of the public_id)
                 media_id = public_id.split('/')[-1]
                 
+                # Remove any file extension from media_id 
+                if '.' in media_id:
+                    media_id = media_id.split('.')[0]
+                
                 # Determine file extension from URL
                 extension = 'jpg'  # Default to jpg
                 if '.png' in cloudinary_url.lower():
@@ -1833,7 +1874,7 @@ def post_photos_to_tiktok_batch(user_id, title, description, photo_urls, privacy
                 # Create filename
                 filename = f"image_{media_id}.{extension}"
                 
-                # For batch processing without a request object, always use the verified domain
+                # For batch processing without request object, always use the verified domain 
                 proxied_url = f"https://emmanueltech.store/accounts/media/{media_id}/{filename}"
                 
                 verified_domain_urls.append(proxied_url)
